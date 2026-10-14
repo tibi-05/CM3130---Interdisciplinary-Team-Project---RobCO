@@ -8,12 +8,11 @@ RobCo team project for James Philp, RGU. Prototype with demo data. Not a product
 npm install
 cp .env.example .env
 npm run db:setup   # creates dev.db and seeds demo data
-npm run demo:reset 
 npm run dev        # http://localhost:3000
 npm test           # clash and status rules
 ```
 
-Run `npm run db:reset` shortly before a demo so every status (free, booked, in use, overdue, out of service) shows on screen.
+Run `npm run demo:reset` (wipes and re-seeds demo data relative to "now") shortly before a demo so every status (free, booked, in use, overdue, out of service) shows on screen.
 
 ## Where things live
 
