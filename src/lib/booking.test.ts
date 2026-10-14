@@ -1,0 +1,84 @@
+import { describe, expect, it } from "vitest";
+import { findClash, statusOf, validateRange, type BookingLike } from "./booking";
+import { londonToUtc } from "./time";
+
+// Thu 15 Oct 2026, London is on BST (UTC+1)
+const at = (time: string, date = "2026-10-15") => londonToUtc(date, time);
+const booking = (start: string, end: string, extra: Partial<BookingLike> = {}): BookingLike => ({
+  start: at(start),
+  end: at(end),
+  checkedOutAt: null,
+  checkedInAt: null,
+  cancelledAt: null,
+  ...extra,
+});
+const ok = { outOfService: false, outOfServiceReason: null };
+
+describe("clashes", () => {
+  const existing = [booking("10:00", "11:00")];
+  const now = at("08:00");
+
+  it("rejects an overlapping booking", () => {
+    expect(findClash(at("10:30"), at("11:30"), existing, now)).toBeDefined();
+    expect(findClash(at("09:00"), at("12:00"), existing, now)).toBeDefined();
+  });
+
+  it("allows bookings that only touch end to end", () => {
+    expect(findClash(at("09:00"), at("10:00"), existing, now)).toBeUndefined();
+    expect(findClash(at("11:00"), at("12:00"), existing, now)).toBeUndefined();
+  });
+
+  it("ignores cancelled bookings", () => {
+    expect(findClash(at("10:00"), at("11:00"), [booking("10:00", "11:00", { cancelledAt: now })], now)).toBeUndefined();
+  });
+
+  it("treats an overdue item as taken until now", () => {
+    const overdue = [booking("10:00", "11:00", { checkedOutAt: at("10:00") })];
+    expect(findClash(at("11:00"), at("12:00"), overdue, at("11:20"))).toBeDefined();
+  });
+
+  it("frees the rest of a booking returned early", () => {
+    const returned = [booking("10:00", "12:00", { checkedOutAt: at("10:00"), checkedInAt: at("10:30") })];
+    expect(findClash(at("11:00"), at("12:00"), returned, at("10:45"))).toBeUndefined();
+  });
+});
+
+describe("status", () => {
+  it("free, with the next booking", () => {
+    const s = statusOf(ok, [booking("14:00", "15:00")], at("12:00"));
+    expect(s).toMatchObject({ kind: "free", nextStart: at("14:00") });
+  });
+
+  it("booked while a reservation is running but not collected", () => {
+    expect(statusOf(ok, [booking("12:00", "13:00")], at("12:10")).kind).toBe("booked");
+  });
+
+  it("in use once checked out", () => {
+    const s = statusOf(ok, [booking("12:00", "13:00", { checkedOutAt: at("12:00") })], at("12:10"));
+    expect(s).toMatchObject({ kind: "in-use", until: at("13:00") });
+  });
+
+  it("overdue when the end passes without a check-in", () => {
+    const s = statusOf(ok, [booking("12:00", "13:00", { checkedOutAt: at("12:00") })], at("13:05"));
+    expect(s).toMatchObject({ kind: "overdue", since: at("13:00") });
+  });
+
+  it("free again after check-in", () => {
+    const b = booking("12:00", "13:00", { checkedOutAt: at("12:00"), checkedInAt: at("12:40") });
+    expect(statusOf(ok, [b], at("12:45")).kind).toBe("free");
+  });
+
+  it("out of service wins over everything", () => {
+    const s = statusOf({ outOfService: true, outOfServiceReason: "Servo" }, [booking("12:00", "13:00")], at("12:10"));
+    expect(s).toEqual({ kind: "out", reason: "Servo" });
+  });
+});
+
+describe("lab rules", () => {
+  const now = at("08:00");
+  it("accepts a normal booking", () => expect(validateRange(at("10:00"), at("11:30"), now)).toBeNull());
+  it("rejects outside lab hours", () => expect(validateRange(at("16:30"), at("17:30"), now)).not.toBeNull());
+  it("rejects weekends", () => expect(validateRange(at("10:00", "2026-10-17"), at("11:00", "2026-10-17"), now)).not.toBeNull());
+  it("rejects off-step times", () => expect(validateRange(at("10:15"), at("11:00"), now)).not.toBeNull());
+  it("lets a walk-up start right now", () => expect(validateRange(at("10:07"), at("11:00"), at("10:07"), { walkUp: true })).toBeNull());
+});

@@ -1,26 +1,81 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* RGU look: colours taken from rgu.ac.uk. Outfit stands in for Zona Pro (licensed). */
+@theme {
+  --font-sans: var(--font-outfit), Helvetica, Arial, sans-serif;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-rgu-purple: #712177;
+  --color-rgu-purple-dark: #571046;
+  --color-rgu-blue: #007abf;
+  --color-rgu-blue-dark: #006b99;
+  --color-rgu-blue-light: #bae0f5;
+  --color-rgu-panel: #d0eaf8;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Status colours stay away from brand purple so it never reads as a state */
+  --color-free: #1b6e35;
+  --color-free-bg: #dff2e5;
+  --color-inuse: #7a4a00;
+  --color-inuse-bg: #ffefcc;
+  --color-booked: #005f9d;
+  --color-booked-bg: #d0eaf8;
+  --color-overdue: #a51d1d;
+  --color-overdue-bg: #fde2e0;
+  --color-out: #444444;
+  --color-out-bg: #e8e8e8;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #ffffff;
+  color: #000000;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-rgu-blue);
+  outline-offset: 2px;
+}
+
+/* RGU buttons: square, uppercase, extra bold, right edge cut at 45° */
+@utility btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.9rem 0.65rem 1.1rem;
+  font-weight: 800;
+  font-size: 0.8125rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--color-rgu-blue);
+  color: #fff;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
+  cursor: pointer;
+  &:hover {
+    background: var(--color-rgu-blue-dark);
+  }
+}
+
+@utility btn-light {
+  background: var(--color-rgu-blue-light);
+  color: #000;
+  &:hover {
+    background: var(--color-rgu-panel);
+  }
+}
+
+@utility btn-danger {
+  background: var(--color-overdue);
+  &:hover {
+    background: #831515;
+  }
+}
+
+/* Angled panel, like RGU's text panels over photos */
+@utility angled {
+  clip-path: polygon(0 0, 100% 0, calc(100% - 48px) 100%, 0 100%);
+}
+
+@utility field {
+  border: 1px solid #6b6b6b;
+  padding: 0.5rem 0.6rem;
+  background: #fff;
+  font: inherit;
 }
