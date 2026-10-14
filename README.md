@@ -29,4 +29,4 @@ Times are stored in UTC and shown in Europe/London.
 
 ## Hosting later
 
-The SQLite file does not survive on Vercel. For a shareable link, set `provider = "postgresql"` in `prisma/schema.prisma`, point `DATABASE_URL` at a free Neon database, and run a fresh migration.
+The SQLite file does not survive on Vercel. For a shareable link, set `provider = "postgresql"` in `prisma/schema.prisma`, point `DATABASE_URL` at a free Neon database, and run a fresh migration. The clash check relies on SQLite running one write at a time; on Postgres, add a lock or a database constraint so two simultaneous bookings cannot both pass.

@@ -25,6 +25,9 @@ export function effectiveEnd(b: BookingLike, now: Date): Date {
   return b.end;
 }
 
+/** Still needs attention: upcoming, running, or checked out and not back (overdue included). */
+export const isActive = (b: BookingLike, now: Date) => !b.cancelledAt && !b.checkedInAt && (b.checkedOutAt !== null || b.end > now);
+
 export const overlaps = (aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) => aStart < bEnd && bStart < aEnd;
 
 export function findClash<B extends BookingLike>(start: Date, end: Date, bookings: B[], now: Date): B | undefined {
@@ -50,11 +53,20 @@ export function statusOf<B extends BookingLike>(
   return { kind: "free", nextStart: next?.start ?? null };
 }
 
+/** Why a booking can't be collected yet (someone else still has the item), or null. `others` = the item's other bookings. */
+export function checkOutBlocker(others: (BookingLike & { user: { name: string } })[]): string | null {
+  const holder = others.find((b) => b.checkedOutAt && !b.checkedInAt && !b.cancelledAt);
+  if (holder) return `${holder.user.name} still has it. It has to be checked in first.`;
+  return null;
+}
+
 /** Returns a message for the person, or null when the range is allowed. */
 export function validateRange(start: Date, end: Date, now: Date, opts: { walkUp?: boolean } = {}): string | null {
   if (!(end > start)) return "The end time must be after the start time.";
   if (end <= now) return "That time has already passed.";
   if (!opts.walkUp && start.getTime() < now.getTime() - LAB.slotMinutes * 60_000) return "That start time has already passed.";
+  if (start.getTime() > now.getTime() + LAB.maxWeeksAhead * 7 * 86_400_000)
+    return `Bookings can be made up to ${LAB.maxWeeksAhead} weeks ahead.`;
   if (londonDate(start) !== londonDate(end)) return "A booking has to start and end on the same day.";
   if (!(LAB.workDays as readonly number[]).includes(londonParts(start).weekday)) return "The lab is only open Monday to Friday.";
 

@@ -61,14 +61,16 @@ export default async function Board({ searchParams }: PageProps<"/">) {
             <h1 className="text-3xl sm:text-4xl font-extrabold uppercase">Equipment</h1>
             <p className="mt-1 text-lg">What&apos;s free in the lab right now</p>
           </div>
-          <dl className="mt-6 flex flex-wrap gap-x-8 gap-y-2 text-lg">
+          <ul aria-label="Equipment by status" className="mt-6 flex flex-wrap gap-x-8 gap-y-2 text-lg">
             {KINDS.map((k) => (
-              <div key={k} className="flex gap-2">
-                <dt className="font-semibold">{STATUS_LABEL[k]}</dt>
-                <dd className="font-extrabold">{count(k)}</dd>
-              </div>
+              <li key={k}>
+                <Link href={href({ status: k })} className="flex gap-2 hover:underline underline-offset-4">
+                  <span className="font-semibold">{STATUS_LABEL[k]}</span>
+                  <span className="font-extrabold">{count(k)}</span>
+                </Link>
+              </li>
             ))}
-          </dl>
+          </ul>
         </div>
       </section>
 

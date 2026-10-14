@@ -2,7 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { currentUser, requestNow } from "@/lib/session";
 import { can } from "@/lib/permissions";
-import { effectiveEnd } from "@/lib/booking";
+import { isActive } from "@/lib/booking";
 import { fmtTime, fmtWhen } from "@/lib/time";
 import { BookingActions } from "@/components/BookingActions";
 import { EquipmentIcon } from "@/components/EquipmentIcon";
@@ -14,6 +14,8 @@ const load = (where: object) =>
 
 function state(b: Row, now: Date) {
   if (b.checkedInAt) return { text: `Returned ${fmtWhen(b.checkedInAt, now)}`, cls: "text-neutral-700" };
+  if (b.equipment.outOfService && !b.checkedOutAt && now < b.end)
+    return { text: "Affected: this item is out of service. Please contact lab staff.", cls: "text-overdue" };
   if (b.checkedOutAt && now > b.end) return { text: `Overdue since ${fmtWhen(b.end, now)}`, cls: "text-overdue" };
   if (b.checkedOutAt) return { text: `Checked out, due back ${fmtWhen(b.end, now)}`, cls: "text-inuse" };
   if (now >= b.end) return { text: "Not collected", cls: "text-neutral-700" };
@@ -25,10 +27,15 @@ export default async function BookingsPage({ searchParams }: PageProps<"/booking
   const user = await currentUser();
   const now = await requestNow();
   const mine = await load({ userId: user.id });
-  const active = (b: Row) => !b.checkedInAt && effectiveEnd(b, now) > now;
+  const active = (b: Row) => isActive(b, now);
   const current = mine.filter(active);
   const past = mine.filter((b) => !active(b)).reverse().slice(0, 5);
-  const everyone = can.manageAnyBooking(user) ? (await load({ checkedInAt: null })).filter((b) => active(b) && b.userId !== user.id) : [];
+
+  // Staff: what's out of the lab right now (overdue first), then everyone else's upcoming bookings.
+  const staff = can.manageAnyBooking(user);
+  const others = staff ? (await load({ checkedInAt: null })).filter(active) : [];
+  const outNow = others.filter((b) => b.checkedOutAt).sort((a, b) => +a.end - +b.end);
+  const upcomingOthers = others.filter((b) => !b.checkedOutAt && b.userId !== user.id);
 
   const list = (rows: Row[], showWho = false) => (
     <ul className="mt-3 divide-y divide-neutral-200 border-y border-neutral-200">
@@ -66,11 +73,18 @@ export default async function BookingsPage({ searchParams }: PageProps<"/booking
         </p>
       )}
 
-      {everyone.length > 0 && (
+      {staff && (
         <section className="mt-12">
-          <h2 className="text-xl font-extrabold uppercase">Everyone&apos;s active bookings</h2>
-          <p className="text-sm text-neutral-700">Staff can check items in and cancel bookings for anyone.</p>
-          {list(everyone, true)}
+          <h2 className="text-xl font-extrabold uppercase">Out now</h2>
+          <p className="text-sm text-neutral-700">Everything checked out of the lab, overdue first. Staff can check items in for anyone.</p>
+          {outNow.length ? list(outNow, true) : <p className="mt-3">Nothing is out right now.</p>}
+        </section>
+      )}
+
+      {upcomingOthers.length > 0 && (
+        <section className="mt-12">
+          <h2 className="text-xl font-extrabold uppercase">Everyone else&apos;s bookings</h2>
+          {list(upcomingOthers, true)}
         </section>
       )}
 

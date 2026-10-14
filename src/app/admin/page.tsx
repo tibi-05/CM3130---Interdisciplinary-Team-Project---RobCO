@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { currentUser } from "@/lib/session";
+import { currentUser, requestNow } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { addEquipment, setOutOfService } from "@/app/actions";
 import { LAB } from "@/lib/config";
@@ -12,7 +13,11 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   if (!can.manageEquipment(user)) {
     return <p className="mx-auto max-w-4xl px-4 py-8">Switch to Admin in the header to manage equipment.</p>;
   }
-  const equipment = await prisma.equipment.findMany({ orderBy: { name: "asc" } });
+  const now = await requestNow();
+  const equipment = await prisma.equipment.findMany({
+    orderBy: { name: "asc" },
+    include: { _count: { select: { bookings: { where: { cancelledAt: null, checkedOutAt: null, end: { gt: now } } } } } },
+  });
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -26,7 +31,15 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
             <form action={setOutOfService} className="flex flex-wrap items-center gap-3">
               <input type="hidden" name="equipmentId" value={e.id} />
               <input type="hidden" name="returnTo" value="/admin" />
-              <span className="font-semibold min-w-44">{e.name}</span>
+              <Link href={`/equipment/${e.id}`} className="font-semibold min-w-44 text-rgu-blue underline">
+                {e.name}
+              </Link>
+              {e._count.bookings > 0 && (
+                <span className="text-sm">
+                  {e._count.bookings} upcoming booking{e._count.bookings > 1 ? "s" : ""}
+                  {e.outOfService ? " affected" : ""}
+                </span>
+              )}
               {e.outOfService ? (
                 <>
                   <span className="text-out">Out of service: {e.outOfServiceReason ?? "no reason given"}</span>

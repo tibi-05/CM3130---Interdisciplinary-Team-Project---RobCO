@@ -36,6 +36,14 @@ export function londonToUtc(date: string, time: string): Date {
   return new Date(guess - offset);
 }
 
+/** Like londonToUtc, but null for anything that isn't a real date and time (e.g. 2027-02-31, 25:00). */
+export function parseLondon(date: string, time: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(time)) return null;
+  const d = londonToUtc(date, time);
+  if (Number.isNaN(d.getTime()) || londonDate(d) !== date || toHHMM(minutesOfDay(d)) !== time) return null;
+  return d;
+}
+
 export function londonDate(d: Date): string {
   const p = londonParts(d);
   return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
@@ -56,12 +64,21 @@ export const slotTimes = () => {
   return out;
 };
 
-/** Monday–Friday date strings of the week containing `d`, shifted by `offsetWeeks` */
-export function workWeek(d: Date, offsetWeeks = 0): string[] {
+/** UTC midnight of the Monday of the lab week `d` falls in (Sat/Sun count towards the next week). */
+function labMonday(d: Date): number {
   const p = londonParts(d);
-  const monday = Date.UTC(p.year, p.month - 1, p.day) - (p.weekday - 1) * DAY_MS + offsetWeeks * 7 * DAY_MS;
+  const shift = p.weekday > 5 ? 8 - p.weekday : 1 - p.weekday;
+  return Date.UTC(p.year, p.month - 1, p.day) + shift * DAY_MS;
+}
+
+/** Monday–Friday date strings of the lab week containing `d`, shifted by `offsetWeeks` */
+export function workWeek(d: Date, offsetWeeks = 0): string[] {
+  const monday = labMonday(d) + offsetWeeks * 7 * DAY_MS;
   return [0, 1, 2, 3, 4].map((i) => new Date(monday + i * DAY_MS).toISOString().slice(0, 10));
 }
+
+/** How many lab weeks `d` is after the current one (for the calendar's ?week=). */
+export const weekOffset = (now: Date, d: Date) => Math.round((labMonday(d) - labMonday(now)) / (7 * DAY_MS));
 
 const timeFmt = new Intl.DateTimeFormat("en-GB", { timeZone: LAB.timeZone, hour: "2-digit", minute: "2-digit" });
 const dayFmt = new Intl.DateTimeFormat("en-GB", { timeZone: LAB.timeZone, weekday: "short", day: "numeric", month: "short" });

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { currentUser, requestNow } from "@/lib/session";
 import { LAB } from "@/lib/config";
-import { effectiveEnd, overlaps, statusOf } from "@/lib/booking";
+import { effectiveEnd, isActive, overlaps, statusOf } from "@/lib/booking";
 import { fmtDay, fmtTime, fmtWhen, londonDate, londonParts, londonToUtc, minutesOfDay, slotTimes, toHHMM, workWeek } from "@/lib/time";
 import { book, walkUp } from "@/app/actions";
 import { EquipmentIcon } from "@/components/EquipmentIcon";
@@ -24,10 +24,11 @@ function defaultBookingDate(now: Date) {
 export default async function EquipmentPage({ params, searchParams }: PageProps<"/equipment/[id]">) {
   const { id } = await params;
   const sp = await searchParams;
-  const week = Math.max(-4, Math.min(8, Number(one(sp.week)) || 0));
+  const week = Math.max(-4, Math.min(LAB.maxWeeksAhead, Number(one(sp.week)) || 0));
   const now = await requestNow();
   const user = await currentUser();
 
+  if (!/^\d+$/.test(id)) notFound();
   const e = await prisma.equipment.findUnique({
     where: { id: Number(id) },
     include: { bookings: { where: { cancelledAt: null }, include: { user: true }, orderBy: { start: "asc" } } },
@@ -38,7 +39,13 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
   const returnTo = `/equipment/${e.id}${week ? `?week=${week}` : ""}`;
   const slots = slotTimes();
   const days = workWeek(now, week);
-  const upcoming = e.bookings.filter((b) => !b.checkedInAt && effectiveEnd(b, now) > now);
+  const upcoming = e.bookings.filter((b) => isActive(b, now));
+
+  // Booking form defaults: the next free slot today (not one already past), else 10:00.
+  const bookDate = defaultBookingDate(now);
+  const nextSlot = Math.ceil((minutesOfDay(now) + 1) / LAB.slotMinutes) * LAB.slotMinutes;
+  const defStart = bookDate === londonDate(now) && nextSlot > 10 * 60 ? Math.min(nextSlot, LAB.closeMinutes - LAB.slotMinutes) : 10 * 60;
+  const defEnd = Math.min(defStart + 60, LAB.closeMinutes);
 
   // Walk-up: free now, lab open, "back by" choices run up to the next booking or closing time.
   const nowMin = minutesOfDay(now);
@@ -87,11 +94,11 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
             <div className="mt-4 flex flex-wrap gap-4">
               <label className="flex flex-col gap-1 font-semibold">
                 Date
-                <input type="date" name="date" required defaultValue={defaultBookingDate(now)} min={londonDate(now)} className="field" />
+                <input type="date" name="date" required defaultValue={bookDate} min={londonDate(now)} className="field" />
               </label>
               <label className="flex flex-col gap-1 font-semibold">
                 From
-                <select name="start" className="field" defaultValue="10:00">
+                <select name="start" className="field" defaultValue={toHHMM(defStart)}>
                   {slots.slice(0, -1).map((t) => (
                     <option key={t}>{t}</option>
                   ))}
@@ -99,7 +106,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
               </label>
               <label className="flex flex-col gap-1 font-semibold">
                 Until
-                <select name="end" className="field" defaultValue="11:00">
+                <select name="end" className="field" defaultValue={toHHMM(defEnd)}>
                   {slots.slice(1).map((t) => (
                     <option key={t}>{t}</option>
                   ))}
@@ -143,17 +150,17 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
             Week of {fmtDay(londonToUtc(days[0], "12:00"))}
           </h2>
           <div className="flex gap-2">
-            <Link className="btn btn-light" href={`/equipment/${e.id}?week=${week - 1}`}>
+            <WeekLink id={e.id} week={week - 1} disabled={week <= -4}>
               ← Previous
-            </Link>
+            </WeekLink>
             {week !== 0 && (
               <Link className="btn btn-light" href={`/equipment/${e.id}`}>
                 This week
               </Link>
             )}
-            <Link className="btn btn-light" href={`/equipment/${e.id}?week=${week + 1}`}>
+            <WeekLink id={e.id} week={week + 1} disabled={week >= LAB.maxWeeksAhead}>
               Next →
-            </Link>
+            </WeekLink>
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-4 text-sm">
@@ -198,7 +205,13 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                         className={`h-7 border-l-4 border-b border-b-white px-1 ${tone} ${past ? "opacity-50" : ""}`}
                         title={b ? `${b.user.name}, ${fmtTime(b.start)}–${fmtTime(b.end)}` : `${t} free`}
                       >
-                        {b && first && <span className="font-semibold truncate block">{b.user.name.split(" ")[0]}</span>}
+                        {b && first && (
+                          <span className="font-semibold truncate block" aria-hidden="true">
+                            {b.user.name.split(" ")[0]}
+                          </span>
+                        )}
+                        {/* Words, not just colour, for screen readers in every booked cell */}
+                        <span className="sr-only">{b ? `${t} ${b.checkedOutAt ? "checked out" : "booked"} by ${b.user.name}` : `${t} free`}</span>
                       </td>
                     );
                   })}
@@ -224,7 +237,9 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                     {fmtWhen(b.start, now)}–{fmtTime(b.end)}
                   </span>{" "}
                   · {b.user.name}
-                  {b.checkedOutAt && <span className="text-inuse font-semibold"> · checked out</span>}
+                  {b.checkedOutAt && now > b.end && <span className="text-overdue font-semibold"> · overdue</span>}
+                  {b.checkedOutAt && now <= b.end && <span className="text-inuse font-semibold"> · checked out</span>}
+                  {e.outOfService && !b.checkedOutAt && <span className="text-overdue font-semibold"> · affected: item out of service</span>}
                 </span>
                 <BookingActions booking={b} user={user} now={now} returnTo={returnTo} />
               </li>
@@ -233,6 +248,18 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
         )}
       </section>
     </div>
+  );
+}
+
+function WeekLink({ id, week, disabled, children }: { id: number; week: number; disabled: boolean; children: React.ReactNode }) {
+  return disabled ? (
+    <span className="btn btn-light" aria-disabled="true">
+      {children}
+    </span>
+  ) : (
+    <Link className="btn btn-light" href={week ? `/equipment/${id}?week=${week}` : `/equipment/${id}`}>
+      {children}
+    </Link>
   );
 }
 

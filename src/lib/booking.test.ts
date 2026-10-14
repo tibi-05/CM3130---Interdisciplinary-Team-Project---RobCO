@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { findClash, statusOf, validateRange, type BookingLike } from "./booking";
-import { londonToUtc } from "./time";
+import { checkOutBlocker, findClash, isActive, statusOf, validateRange, type BookingLike } from "./booking";
+import { londonToUtc, parseLondon, weekOffset, workWeek } from "./time";
+import { safePath } from "./paths";
 
 // Thu 15 Oct 2026, London is on BST (UTC+1)
 const at = (time: string, date = "2026-10-15") => londonToUtc(date, time);
@@ -81,4 +82,43 @@ describe("lab rules", () => {
   it("rejects weekends", () => expect(validateRange(at("10:00", "2026-10-17"), at("11:00", "2026-10-17"), now)).not.toBeNull());
   it("rejects off-step times", () => expect(validateRange(at("10:15"), at("11:00"), now)).not.toBeNull());
   it("lets a walk-up start right now", () => expect(validateRange(at("10:07"), at("11:00"), at("10:07"), { walkUp: true })).toBeNull());
+});
+
+describe("bugs found in QA", () => {
+  it("an overdue booking still counts as active (so it can be checked in)", () => {
+    const overdue = booking("10:00", "11:00", { checkedOutAt: at("10:00") });
+    expect(isActive(overdue, at("12:00"))).toBe(true);
+    expect(isActive(booking("10:00", "11:00"), at("12:00"))).toBe(false); // never collected
+    expect(isActive({ ...overdue, checkedInAt: at("12:00") }, at("12:05"))).toBe(false);
+  });
+
+  it("can't check out while someone else still has the item", () => {
+    const holder = { ...booking("10:00", "11:00", { checkedOutAt: at("10:00") }), user: { name: "Priya" } };
+    expect(checkOutBlocker([holder])).toMatch(/Priya/);
+    expect(checkOutBlocker([{ ...holder, checkedInAt: at("11:00") }])).toBeNull();
+  });
+
+  it("rejects bookings too far ahead", () => {
+    expect(validateRange(at("10:00", "2027-01-14"), at("11:00", "2027-01-14"), at("08:00"))).toMatch(/weeks ahead/);
+  });
+
+  it("parses only real dates and times", () => {
+    expect(parseLondon("2026-10-15", "10:00")).toEqual(at("10:00"));
+    expect(parseLondon("2027-02-31", "10:00")).toBeNull();
+    expect(parseLondon("", "10:00")).toBeNull();
+    expect(parseLondon("2026-10-15", "25:00")).toBeNull();
+  });
+
+  it("weekends show the coming lab week", () => {
+    expect(workWeek(at("12:00", "2026-10-17"))[0]).toBe("2026-10-19"); // Saturday
+    expect(workWeek(at("12:00", "2026-10-18"))[0]).toBe("2026-10-19"); // Sunday
+    expect(workWeek(at("12:00", "2026-10-16"))[0]).toBe("2026-10-12"); // Friday
+    expect(weekOffset(at("12:00"), at("10:00", "2026-10-28"))).toBe(2); // across the clock change
+  });
+
+  it("only redirects within the site", () => {
+    expect(safePath("/equipment/2?week=1").pathname).toBe("/equipment/2");
+    for (const bad of ["/.//example.com/phish", "//example.com", "/\\example.com", "https://example.com"])
+      expect(safePath(bad).pathname).toBe("/");
+  });
 });

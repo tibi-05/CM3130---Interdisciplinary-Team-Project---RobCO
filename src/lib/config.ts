@@ -8,5 +8,6 @@ export const LAB = {
   slotMinutes: 30,
   workDays: [1, 2, 3, 4, 5], // Mon–Fri
   maxBookingMinutes: 4 * 60,
+  maxWeeksAhead: 8, // matches how far the week calendar goes
   checkOutEarlyMinutes: 15, // can collect this long before a booking starts
 } as const;
