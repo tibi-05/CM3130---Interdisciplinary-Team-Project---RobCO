@@ -7,7 +7,8 @@ RobCo team project for James Philp, RGU. Prototype with demo data. Not a product
 ```bash
 npm install
 cp .env.example .env
-npm run db:reset   # creates dev.db and seeds demo data relative to "now"
+npm run db:setup   # creates dev.db and seeds demo data
+npm run demo:reset 
 npm run dev        # http://localhost:3000
 npm test           # clash and status rules
 ```

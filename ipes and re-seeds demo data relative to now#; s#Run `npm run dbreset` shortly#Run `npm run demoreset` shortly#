@@ -1,0 +1,2 @@
+npm run db:setup   # creates dev.db and seeds demo data
+npm run demo:reset 
