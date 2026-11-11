@@ -26,10 +26,13 @@ export const INVENTORY: InventoryRow[] = [
 
 export type Unit = Omit<InventoryRow, "quantity"> & { name: string };
 
-/** One bookable unit per physical robot. "Unknown"/"to confirm" models get no number in the name. */
+/** The sheet writes "Unknown" or "Model to confirm" where it has no model; treat those as no model. */
+export const isPlaceholder = (s: string) => /unknown|confirm/i.test(s);
+
+/** One bookable unit per physical robot. Units with no real model get no number in the name. */
 export function toUnits(rows: InventoryRow[]): Unit[] {
   return rows.flatMap(({ quantity, ...r }) => {
-    const base = /unknown|confirm/i.test(r.model) ? r.manufacturer : `${r.manufacturer} ${r.model}`;
+    const base = isPlaceholder(r.model) ? r.manufacturer : `${r.manufacturer} ${r.model}`;
     return Array.from({ length: quantity }, (_, i) => ({ ...r, name: quantity > 1 ? `${base} #${i + 1}` : base }));
   });
 }

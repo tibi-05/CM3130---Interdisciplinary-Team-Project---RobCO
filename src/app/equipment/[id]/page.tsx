@@ -86,7 +86,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm border-l-4 border-rgu-panel pl-4 self-start">
           <dt className="font-semibold">Asset ID</dt>
           <dd className="font-mono">{e.assetId ?? "Not recorded"}</dd>
-          <dt className="font-semibold">Make</dt>
+          <dt className="font-semibold">Manufacturer</dt>
           <dd>{e.manufacturer ?? "Not recorded"}</dd>
           <dt className="font-semibold">Model</dt>
           <dd>{e.model ?? "Not recorded"}</dd>

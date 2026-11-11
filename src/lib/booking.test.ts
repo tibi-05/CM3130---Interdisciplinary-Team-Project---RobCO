@@ -133,3 +133,12 @@ describe("inventory units", () => {
     expect(new Set(units.map((u) => u.name)).size).toBe(9); // names unique, so bookings can tell twins apart
   });
 });
+
+describe("inventory placeholders", () => {
+  it("treats the sheet's 'Unknown' and 'Model to confirm' as no model", async () => {
+    const { isPlaceholder } = await import("../../prisma/inventory");
+    expect(isPlaceholder("Unknown")).toBe(true);
+    expect(isPlaceholder("Model to confirm")).toBe(true);
+    expect(isPlaceholder("Go2")).toBe(false);
+  });
+});

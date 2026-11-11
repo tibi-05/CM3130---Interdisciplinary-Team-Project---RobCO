@@ -1,7 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { londonDate, londonParts, londonToUtc } from "../src/lib/time";
-import { LAB } from "../src/lib/config";
-import { INVENTORY, toUnits } from "./inventory";
+import { INVENTORY, isPlaceholder, toUnits } from "./inventory";
 
 // Statuses are set relative to "now" so every badge shows; calendar bookings go on the coming lab days.
 // Re-run `npm run demo:reset` shortly before a demo.
@@ -42,10 +41,10 @@ async function main() {
         data: {
           name: u.name,
           type: u.type,
-          location: LAB.location,
+          location: u.location,
           assetId: u.assetId,
           manufacturer: u.manufacturer,
-          model: u.model,
+          model: isPlaceholder(u.model) ? null : u.model,
           serialNumber: u.serialNumber ?? null,
           condition: u.condition,
           notes: u.notes ?? null,

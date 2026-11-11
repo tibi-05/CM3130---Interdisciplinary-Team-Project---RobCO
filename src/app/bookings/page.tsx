@@ -48,6 +48,7 @@ export default async function BookingsPage({ searchParams }: PageProps<"/booking
               <Link href={`/equipment/${b.equipmentId}`} className="font-extrabold hover:underline">
                 {b.equipment.name}
               </Link>
+              {b.equipment.assetId && <span className="font-mono text-sm text-neutral-700"> · {b.equipment.assetId}</span>}
               <p>
                 {fmtWhen(b.start, now)}–{fmtTime(b.end)}
                 {showWho && <> · {b.user.name}</>}

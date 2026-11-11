@@ -14,10 +14,11 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
     return <p className="mx-auto max-w-4xl px-4 py-8">Switch to Admin in the header to manage equipment.</p>;
   }
   const now = await requestNow();
-  const equipment = await prisma.equipment.findMany({
-    orderBy: { name: "asc" },
-    include: { _count: { select: { bookings: { where: { cancelledAt: null, checkedOutAt: null, end: { gt: now } } } } } },
-  });
+  const equipment = (
+    await prisma.equipment.findMany({
+      include: { _count: { select: { bookings: { where: { cancelledAt: null, checkedOutAt: null, end: { gt: now } } } } } },
+    })
+  ).sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
@@ -99,7 +100,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
         </label>
         <label className="flex flex-col gap-1 font-semibold">
           Condition
-          <input name="condition" defaultValue="Good" className="field" />
+          <input name="condition" placeholder="e.g. Good" className="field" />
         </label>
         <label className="flex flex-col gap-1 font-semibold">
           Notes

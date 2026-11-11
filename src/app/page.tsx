@@ -32,9 +32,8 @@ export default async function Board({ searchParams }: PageProps<"/">) {
 
   const equipment = await prisma.equipment.findMany({
     include: { bookings: { where: { cancelledAt: null }, include: { user: true } } },
-    orderBy: { name: "asc" },
   });
-  const all = equipment.map((e) => ({ e, s: statusOf(e, e.bookings, now) }));
+  const all = equipment.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" })).map((e) => ({ e, s: statusOf(e, e.bookings, now) }));
   const types = [...new Set(equipment.map((e) => e.type))].sort();
   const shown = all.filter((x) => (!type || x.e.type === type) && (!kind || x.s.kind === kind));
   const count = (k: StatusKind) => all.filter((x) => x.s.kind === k).length;
