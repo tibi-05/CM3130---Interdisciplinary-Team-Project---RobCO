@@ -60,6 +60,28 @@ const PATHS: Record<string, React.ReactNode> = {
   ),
 };
 
+// Types used by the real inventory (prisma/inventory.ts)
+PATHS["Quadruped Robot"] = PATHS["Robot dog"];
+PATHS["Industrial Robot Arm"] = PATHS["Robot arm"];
+PATHS["Collaborative Robot Arm"] = PATHS["Robot arm"];
+PATHS["Humanoid Robot"] = (
+  <>
+    <circle cx="24" cy="11" r="6" />
+    <path d="M18 11h-3M30 11h3" />
+    <rect x="16" y="19" width="16" height="14" />
+    <path d="M16 22l-6 8M32 22l6 8" />
+    <path d="M20 33v9M28 33v9M17 42h6M25 42h6" />
+  </>
+);
+PATHS["Control System Rig"] = (
+  <>
+    <rect x="8" y="10" width="32" height="26" />
+    <path d="M8 18h32M14 14h4M22 14h4" />
+    <path d="M14 24h6v6h-6zM24 24h10M24 30h10" />
+    <path d="M18 36v6M30 36v6M14 42h20" />
+  </>
+);
+
 const FALLBACK = (
   <>
     <rect x="10" y="10" width="28" height="28" />

@@ -122,3 +122,14 @@ describe("bugs found in QA", () => {
       expect(safePath(bad).pathname).toBe("/");
   });
 });
+
+describe("inventory units", () => {
+  it("expands quantities into numbered units that share the asset ID", async () => {
+    const { INVENTORY, toUnits } = await import("../../prisma/inventory");
+    const units = toUnits(INVENTORY);
+    expect(units).toHaveLength(9);
+    expect(units.filter((u) => u.assetId === "ROB-001").map((u) => u.name)).toEqual(["Unitree Go2 #1", "Unitree Go2 #2"]);
+    expect(units.find((u) => u.assetId === "ROB-003")?.name).toBe("dSPACE"); // model unknown: no number, no "Unknown"
+    expect(new Set(units.map((u) => u.name)).size).toBe(9); // names unique, so bookings can tell twins apart
+  });
+});

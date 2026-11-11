@@ -21,6 +21,11 @@ model Equipment {
   name               String
   type               String
   location           String
+  assetId            String? // from the lab's inventory sheet, e.g. ROB-001 (shared by identical units)
+  manufacturer       String?
+  model              String?
+  serialNumber       String?
+  condition          String? // as recorded on the inventory sheet
   notes              String?
   outOfService       Boolean   @default(false)
   outOfServiceReason String?

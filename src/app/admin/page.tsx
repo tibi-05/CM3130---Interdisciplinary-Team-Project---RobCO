@@ -34,6 +34,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
               <Link href={`/equipment/${e.id}`} className="font-semibold min-w-44 text-rgu-blue underline">
                 {e.name}
               </Link>
+              {e.assetId && <span className="text-sm font-mono text-neutral-700">{e.assetId}</span>}
               {e._count.bookings > 0 && (
                 <span className="text-sm">
                   {e._count.bookings} upcoming booking{e._count.bookings > 1 ? "s" : ""}
@@ -79,6 +80,26 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
         <label className="flex flex-col gap-1 font-semibold">
           Location
           <input name="location" defaultValue={LAB.location} className="field" />
+        </label>
+        <label className="flex flex-col gap-1 font-semibold">
+          Asset ID
+          <input name="assetId" placeholder="e.g. ROB-009" className="field" />
+        </label>
+        <label className="flex flex-col gap-1 font-semibold">
+          Manufacturer
+          <input name="manufacturer" className="field" />
+        </label>
+        <label className="flex flex-col gap-1 font-semibold">
+          Model
+          <input name="model" className="field" />
+        </label>
+        <label className="flex flex-col gap-1 font-semibold">
+          Serial number
+          <input name="serialNumber" className="field" />
+        </label>
+        <label className="flex flex-col gap-1 font-semibold">
+          Condition
+          <input name="condition" defaultValue="Good" className="field" />
         </label>
         <label className="flex flex-col gap-1 font-semibold">
           Notes

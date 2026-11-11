@@ -18,6 +18,7 @@ Run `npm run demo:reset` (wipes and re-seeds demo data relative to "now") shortl
 
 | What | File |
 | --- | --- |
+| The lab's inventory (from James's spreadsheet; one unit per robot) | `prisma/inventory.ts` |
 | Lab rules (hours, slot size, max length) | `src/lib/config.ts` |
 | Clash check, status and validation (pure, tested) | `src/lib/booking.ts`, `src/lib/booking.test.ts` |
 | Who can do what | `src/lib/permissions.ts` |

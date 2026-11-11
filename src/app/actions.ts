@@ -148,6 +148,19 @@ export async function addEquipment(f: FormData) {
   const name = str(f, "name");
   const type = str(f, "type");
   if (!name || !type) done(f, "error", "Name and type are required.");
-  await prisma.equipment.create({ data: { name, type, location: str(f, "location") || LAB.location, notes: str(f, "notes") || null } });
+  const opt = (k: string) => str(f, k) || null;
+  await prisma.equipment.create({
+    data: {
+      name,
+      type,
+      location: str(f, "location") || LAB.location,
+      assetId: opt("assetId"),
+      manufacturer: opt("manufacturer"),
+      model: opt("model"),
+      serialNumber: opt("serialNumber"),
+      condition: opt("condition"),
+      notes: opt("notes"),
+    },
+  });
   done(f, "ok", `${name} added.`);
 }

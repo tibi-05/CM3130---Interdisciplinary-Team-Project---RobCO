@@ -108,6 +108,7 @@ export default async function Board({ searchParams }: PageProps<"/">) {
                   <h2 className="text-lg font-extrabold group-hover:underline">{e.name}</h2>
                   <p className="text-sm text-neutral-700">
                     {e.type} · {e.location}
+                    {e.assetId && <span className="font-mono"> · {e.assetId}</span>}
                   </p>
                   <div className="mt-2">
                     <StatusBadge status={s} now={now} />

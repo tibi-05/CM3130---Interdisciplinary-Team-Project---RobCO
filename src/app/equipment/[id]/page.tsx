@@ -83,6 +83,18 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
           )}
           {e.notes && <p className="mt-2 text-sm text-neutral-700 italic">{e.notes}</p>}
         </div>
+        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm border-l-4 border-rgu-panel pl-4 self-start">
+          <dt className="font-semibold">Asset ID</dt>
+          <dd className="font-mono">{e.assetId ?? "Not recorded"}</dd>
+          <dt className="font-semibold">Make</dt>
+          <dd>{e.manufacturer ?? "Not recorded"}</dd>
+          <dt className="font-semibold">Model</dt>
+          <dd>{e.model ?? "Not recorded"}</dd>
+          <dt className="font-semibold">Serial no.</dt>
+          <dd>{e.serialNumber ?? "Not recorded"}</dd>
+          <dt className="font-semibold">Condition</dt>
+          <dd>{e.condition ?? "Not recorded"}</dd>
+        </dl>
       </div>
 
       {e.outOfService ? null : (
