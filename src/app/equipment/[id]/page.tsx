@@ -15,6 +15,7 @@ import { BookingActions } from "@/components/BookingActions";
 import { Notice, one } from "@/components/Notice";
 import { SelectField, TextArea, TextField } from "@/components/Field";
 import { BackLink, Chevron, PageHead } from "@/components/PageHead";
+import { Form } from "@/components/Form";
 
 const isLabDay = (d: Date) => (LAB.workDays as readonly number[]).includes(londonParts(d).weekday);
 
@@ -188,7 +189,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
         {/* ---- Booking ---- */}
         {e.outOfService ? null : (
           <div className="mt-10 grid gap-6 md:grid-cols-2">
-            <form action={book} className="panel">
+            <Form action={book} className="panel">
               <h2 className="section-title">Book a time</h2>
               <input type="hidden" name="equipmentId" value={e.id} />
               <input type="hidden" name="returnTo" value={returnTo} />
@@ -217,9 +218,9 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                   Need it for longer or several days?
                 </Link>
               </div>
-            </form>
+            </Form>
 
-            <form action={walkUp} className="panel bg-rgu-panel/40">
+            <Form action={walkUp} className="panel bg-rgu-panel/40">
               <h2 className="section-title">Take it now</h2>
               <input type="hidden" name="equipmentId" value={e.id} />
               <input type="hidden" name="returnTo" value={returnTo} />
@@ -238,7 +239,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
               ) : (
                 <p className="mt-4">{status.kind !== "free" ? "Not free right now." : "Walk-up checkout is only available during lab hours."}</p>
               )}
-            </form>
+            </Form>
           </div>
         )}
 
@@ -392,7 +393,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                       )}
                     </p>
                     {!f.resolvedAt && can.resolveFaults(user) && (
-                      <form action={resolveFault} className="mt-3 flex flex-wrap items-end gap-3">
+                      <Form action={resolveFault} className="mt-3 flex flex-wrap items-end gap-3">
                         <input type="hidden" name="faultId" value={f.id} />
                         <input type="hidden" name="returnTo" value={returnTo} />
                         <TextField label="What was done" name="resolution" maxLength={300} className="min-w-48 flex-1 text-sm" />
@@ -402,14 +403,14 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                           </label>
                         )}
                         <button className="btn">Resolve</button>
-                      </form>
+                      </Form>
                     )}
                   </li>
                 ))}
               </ul>
             )}
           </div>
-          <form action={reportFault} className="panel self-start">
+          <Form action={reportFault} className="panel self-start">
             <h3 className="text-lg font-extrabold uppercase">Report a fault</h3>
             <input type="hidden" name="equipmentId" value={e.id} />
             <input type="hidden" name="returnTo" value={returnTo} />
@@ -426,7 +427,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
               </fieldset>
             </div>
             <button className="btn mt-4">Report fault</button>
-          </form>
+          </Form>
         </section>
 
         {/* ---- Usage history (client: condition before and after use) ---- */}

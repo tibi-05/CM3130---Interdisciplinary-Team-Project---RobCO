@@ -8,6 +8,7 @@ import { EquipmentIcon } from "@/components/EquipmentIcon";
 import { Notice, one } from "@/components/Notice";
 import { SelectField, TextArea, TextField } from "@/components/Field";
 import { BackLink, PageHead } from "@/components/PageHead";
+import { Form } from "@/components/Form";
 
 // Extended bookings (client: no inflexible maximum, research and honours projects need longer;
 // long bookings go through a request that explains why, and staff approve it).
@@ -40,7 +41,7 @@ export default async function RequestPage({ params, searchParams }: PageProps<"/
           {e.outOfService ? (
             <p className="mt-6 border-l-4 border-out bg-out-bg p-4 font-semibold">This item is out of service and can&apos;t be requested right now.</p>
           ) : (
-            <form action={requestExtended} className="panel mt-6 sm:p-6">
+            <Form action={requestExtended} className="panel mt-6 sm:p-6">
               <input type="hidden" name="equipmentId" value={e.id} />
               <input type="hidden" name="returnTo" value={`/equipment/${e.id}/request`} />
               <fieldset className="grid gap-4 sm:grid-cols-2">
@@ -68,7 +69,7 @@ export default async function RequestPage({ params, searchParams }: PageProps<"/
                 />
               </div>
               <button className="btn mt-6">Send request</button>
-            </form>
+            </Form>
           )}
         </div>
       </div>

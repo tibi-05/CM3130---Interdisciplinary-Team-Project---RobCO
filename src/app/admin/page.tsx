@@ -8,6 +8,7 @@ import { Notice, one } from "@/components/Notice";
 import { EquipmentForm } from "@/components/EquipmentForm";
 import { TextField } from "@/components/Field";
 import { Denied, PageHead } from "@/components/PageHead";
+import { Form } from "@/components/Form";
 
 export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const sp = await searchParams;
@@ -54,7 +55,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                     <p className="text-sm">
                       Reported {fmtDay(f.createdAt)} by {f.reporter.name}
                     </p>
-                    <form action={resolveFault} className="mt-3 flex flex-wrap items-end gap-3">
+                    <Form action={resolveFault} className="mt-3 flex flex-wrap items-end gap-3">
                       <input type="hidden" name="faultId" value={f.id} />
                       <input type="hidden" name="returnTo" value="/admin#faults" />
                       <TextField label="What was done" name="resolution" maxLength={300} className="min-w-64 flex-1" />
@@ -64,7 +65,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                         </label>
                       )}
                       <button className="btn">Mark resolved</button>
-                    </form>
+                    </Form>
                   </li>
                 ))}
               </ul>
@@ -78,7 +79,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
             <ul className="mt-4 divide-y divide-rule border-y border-rule">
               {equipment.map((e) => (
                 <li key={e.id} className="py-3">
-                  <form action={setOutOfService} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <Form action={setOutOfService} className="flex flex-wrap items-center gap-x-4 gap-y-2">
                     <input type="hidden" name="equipmentId" value={e.id} />
                     <input type="hidden" name="returnTo" value="/admin" />
                     <div className="min-w-48 flex-1 basis-56">
@@ -111,7 +112,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                         </button>
                       </div>
                     )}
-                  </form>
+                  </Form>
                 </li>
               ))}
             </ul>

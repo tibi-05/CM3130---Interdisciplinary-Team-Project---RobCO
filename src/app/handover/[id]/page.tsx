@@ -9,6 +9,7 @@ import { EquipmentIcon } from "@/components/EquipmentIcon";
 import { Notice, one } from "@/components/Notice";
 import { TextArea } from "@/components/Field";
 import { BackLink, PageHead } from "@/components/PageHead";
+import { Form } from "@/components/Form";
 
 // Collection and return in one place, with a 20-second condition check each way
 // (client: record condition before and after use; flat batteries delayed the next user).
@@ -53,7 +54,7 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
           {done ? (
             <p>This booking was checked in {fmtWhen(b.checkedInAt!, now)}.</p>
           ) : (
-            <form action={returning ? checkIn : checkOut} className="panel sm:p-6">
+            <Form action={returning ? checkIn : checkOut} className="panel sm:p-6">
               <input type="hidden" name="bookingId" value={b.id} />
               <input type="hidden" name="returnTo" value={`/handover/${b.id}`} />
               {late && (
@@ -99,7 +100,7 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
                   : "If it's damaged or not working, it won't be checked out: the fault is recorded and staff are told."}
               </p>
               <button className="btn mt-5">{returning ? "Check in" : "Check out"}</button>
-            </form>
+            </Form>
           )}
         </div>
       </div>
