@@ -1,5 +1,6 @@
 import { LAB } from "@/lib/config";
 import { TextArea, TextField } from "./Field";
+import { Form } from "@/components/Form";
 
 type Values = Partial<{
   id: number;
@@ -33,7 +34,7 @@ export function EquipmentForm({
 }) {
   const v = (k: keyof Values) => (values[k] == null ? undefined : String(values[k]));
   return (
-    <form action={action} className="grid gap-4 sm:grid-cols-2">
+    <Form action={action} className="grid gap-4 sm:grid-cols-2">
       <input type="hidden" name="returnTo" value={returnTo} />
       {values.id && <input type="hidden" name="equipmentId" value={values.id} />}
       <TextField label="Name" name="name" required defaultValue={v("name")} hint="Number identical units, e.g. Unitree Go2 #3" />
@@ -63,6 +64,6 @@ export function EquipmentForm({
       <div>
         <button className="btn">{submit}</button>
       </div>
-    </form>
+    </Form>
   );
 }

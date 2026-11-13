@@ -10,6 +10,7 @@ import { EquipmentIcon } from "@/components/EquipmentIcon";
 import { Notice, one } from "@/components/Notice";
 import { TextField } from "@/components/Field";
 import { Denied, PageHead } from "@/components/PageHead";
+import { Form } from "@/components/Form";
 
 // Staff: approve or decline requests (client: approval for kit leaving the lab and for long bookings),
 // and see fair-use flags (repeated bookings by one person), which never block anyone.
@@ -89,7 +90,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                         </ul>
                       </div>
                     </div>
-                    <form action={review} className="mt-5 flex flex-wrap items-end gap-3 border-t border-rule pt-5">
+                    <Form action={review} className="mt-5 flex flex-wrap items-end gap-3 border-t border-rule pt-5">
                       <input type="hidden" name="bookingId" value={b.id} />
                       <input type="hidden" name="returnTo" value="/requests" />
                       <TextField label="Note to the student (optional)" name="note" maxLength={300} className="min-w-64 flex-1" />
@@ -101,7 +102,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                           Decline
                         </button>
                       </div>
-                    </form>
+                    </Form>
                   </li>
                 );
               })}
