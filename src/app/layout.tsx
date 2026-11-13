@@ -16,11 +16,15 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en-GB" className={`${outfit.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans">
         <Header />
-        <main className="flex-1">{children}</main>
-        <footer className="bg-rgu-purple text-white text-sm">
-          <div className="mx-auto max-w-6xl px-4 py-6 flex flex-wrap justify-between gap-2">
-            <span className="font-semibold">{LAB.name}</span>
-            <span>Prototype · demo data · times in UK time</span>
+        <main className="flex-1 pb-16">{children}</main>
+        <footer className="bg-rgu-purple text-on-brand text-sm">
+          <div className="mx-auto max-w-6xl px-4 py-6 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+            <span className="text-base font-extrabold uppercase">{LAB.name}</span>
+            <ul className="meta" aria-label="About this site">
+              <li>Prototype</li>
+              <li>Demo data</li>
+              <li>Times in UK time</li>
+            </ul>
           </div>
         </footer>
       </body>

@@ -10,7 +10,7 @@ export function TextField({ label, hint, className = "", ...input }: Base & Reac
       {label}
       <input id={id} aria-describedby={hint ? `${id}-hint` : undefined} className="field font-normal" {...input} />
       {hint && (
-        <span id={`${id}-hint`} className="text-sm font-normal text-neutral-700">
+        <span id={`${id}-hint`} className="text-sm font-normal text-muted">
           {hint}
         </span>
       )}
@@ -25,7 +25,7 @@ export function TextArea({ label, hint, className = "", ...area }: Base & React.
       {label}
       <textarea id={id} aria-describedby={hint ? `${id}-hint` : undefined} className="field font-normal" rows={3} {...area} />
       {hint && (
-        <span id={`${id}-hint`} className="text-sm font-normal text-neutral-700">
+        <span id={`${id}-hint`} className="text-sm font-normal text-muted">
           {hint}
         </span>
       )}
@@ -50,7 +50,7 @@ export function SelectField({
         ))}
       </select>
       {hint && (
-        <span id={`${id}-hint`} className="text-sm font-normal text-neutral-700">
+        <span id={`${id}-hint`} className="text-sm font-normal text-muted">
           {hint}
         </span>
       )}

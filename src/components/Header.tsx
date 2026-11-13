@@ -5,6 +5,7 @@ import { can } from "@/lib/permissions";
 import { syncNotifications } from "@/lib/notify";
 import { currentUser, requestNow, ROLES } from "@/lib/session";
 import { LiveCount } from "./LiveCount";
+import { NavLink } from "./NavLink";
 
 const LABEL = { STUDENT: "Student", STAFF: "Staff", ADMIN: "Admin" } as const;
 
@@ -26,31 +27,31 @@ export async function Header() {
   ];
 
   return (
-    <header className="bg-rgu-purple text-white">
-      <div className="mx-auto max-w-6xl px-4 py-3 flex flex-wrap items-center gap-x-8 gap-y-3">
-        <Link href="/" className="leading-none">
-          <span className="block text-[0.7rem] font-extrabold tracking-[0.2em]">RGU</span>
-          <span className="block text-xl font-extrabold uppercase">Robotics Lab</span>
+    <header className="bg-rgu-purple text-on-brand">
+      <div className="mx-auto max-w-6xl px-4 py-2 flex flex-wrap items-center gap-x-6 gap-y-1">
+        <Link href="/" className="wordmark flex min-h-11 flex-col justify-center py-1 leading-none">
+          <span className="wordmark block text-[0.7rem] font-extrabold tracking-[0.2em]">RGU</span>
+          <span className="wordmark block text-xl font-extrabold uppercase">Robotics Lab</span>
         </Link>
-        <nav aria-label="Main" className="flex flex-wrap gap-x-6 gap-y-2 font-semibold">
+        <nav aria-label="Main" className="flex flex-wrap gap-x-5 font-semibold">
           {nav.map((n) => (
-            <Link key={n.href} href={n.href} className="hover:underline underline-offset-4">
+            <NavLink key={n.href} href={n.href}>
               {n.label}
               {"which" in n && n.which && <LiveCount key={n.count} which={n.which} initial={n.count ?? 0} label={n.countLabel ?? ""} />}
-            </Link>
+            </NavLink>
           ))}
         </nav>
-        <form action={setRole} className="ml-auto flex flex-wrap items-center gap-2 text-sm">
-          <span className="opacity-90">Viewing as {user.name}</span>
-          <div role="group" aria-label="Switch role (prototype)" className="flex border border-white/60">
+        <form action={setRole} className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 py-1 text-sm">
+          <span>Viewing as {user.name}</span>
+          <div role="group" aria-label="Switch role (prototype)" className="flex border border-on-brand/70">
             {ROLES.map((r) => (
               <button
                 key={r}
                 name="role"
                 value={r}
                 aria-pressed={user.role === r}
-                className={`px-3 py-1.5 font-semibold cursor-pointer ${
-                  user.role === r ? "bg-white text-rgu-purple" : "hover:bg-rgu-purple-dark"
+                className={`min-h-10 px-3 font-semibold cursor-pointer ${
+                  user.role === r ? "bg-on-brand text-rgu-purple" : "hover:bg-rgu-purple-dark"
                 }`}
               >
                 {LABEL[r]}

@@ -38,7 +38,7 @@ export function LiveCount({ which, initial, label }: { which: keyof Counts; init
 
   if (!n) return null;
   return (
-    <span className="ml-1.5 inline-block min-w-5 bg-white px-1.5 text-center text-xs font-extrabold leading-5 text-rgu-purple">
+    <span className="ml-1.5 inline-block min-w-5 bg-on-brand px-1.5 text-center text-xs font-extrabold leading-5 text-rgu-purple tabular-nums">
       {n}
       <span className="sr-only"> {label}</span>
     </span>
