@@ -9,16 +9,18 @@ import { one } from "@/components/Notice";
 
 const KINDS: StatusKind[] = ["free", "booked", "in-use", "overdue", "out"];
 
-function detail(s: Status<BookingLike & { user: { name: string } }>, now: Date) {
+function detail(s: Status<BookingLike & { user: { name: string }; useLocation: string | null }>, now: Date) {
   switch (s.kind) {
     case "free":
       return s.nextStart ? `Next booking ${fmtWhen(s.nextStart, now)}` : "No upcoming bookings";
     case "booked":
-      return `Reserved for ${s.booking.user.name}, not collected yet`;
+      return s.booking.approval === "PENDING"
+        ? `Requested by ${s.booking.user.name}, awaiting approval`
+        : `Reserved for ${s.booking.user.name}, not collected yet`;
     case "in-use":
-      return `With ${s.booking.user.name}`;
+      return `With ${s.booking.user.name}${s.booking.useLocation ? ` at ${s.booking.useLocation}` : ""}`;
     case "overdue":
-      return `With ${s.booking.user.name}, not returned`;
+      return `With ${s.booking.user.name}, not returned${s.booking.useLocation ? ` (taken to ${s.booking.useLocation})` : ""}`;
     case "out":
       return s.reason ?? "Not available";
   }

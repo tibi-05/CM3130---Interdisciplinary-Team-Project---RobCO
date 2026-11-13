@@ -142,3 +142,81 @@ describe("inventory placeholders", () => {
     expect(isPlaceholder("Go2")).toBe(false);
   });
 });
+
+describe("client requirements (16 Oct meeting)", () => {
+  const now = at("08:00");
+
+  it("rejected requests don't block the slot; pending ones do", async () => {
+    const { findClash } = await import("./booking");
+    expect(findClash(at("10:00"), at("11:00"), [booking("10:00", "11:00", { approval: "REJECTED" })], now)).toBeUndefined();
+    expect(findClash(at("10:00"), at("11:00"), [booking("10:00", "11:00", { approval: "PENDING" })], now)).toBeDefined();
+  });
+
+  it("extended bookings may span days with no maximum, but must start and end in lab hours", () => {
+    expect(validateRange(at("09:00"), at("17:00", "2026-10-21"), now, { extended: true })).toBeNull();
+    expect(validateRange(at("09:00"), at("17:00", "2026-10-21"), now)).toMatch(/extended/);
+    expect(validateRange(at("09:00"), at("18:00", "2026-10-21"), now, { extended: true })).toMatch(/lab hours/);
+    expect(validateRange(at("09:00"), at("12:00", "2026-10-17"), now, { extended: true })).toMatch(/weekday/);
+  });
+
+  it("asks for approval when kit leaves the lab or runs long", async () => {
+    const { approvalReasons } = await import("./booking");
+    expect(approvalReasons({ start: at("10:00"), end: at("11:00") })).toEqual([]);
+    expect(approvalReasons({ start: at("10:00"), end: at("11:00"), useLocation: "Room 2249" })).toEqual(["Leaves the lab: Room 2249"]);
+    expect(approvalReasons({ start: at("09:00"), end: at("17:00", "2026-10-20"), kind: "EXTENDED" })).toEqual(["Runs over several days"]);
+  });
+
+  it("flags repeated bookings of one item by one person, without blocking", async () => {
+    const { repeatedBookings } = await import("./booking");
+    const mk = (day: string, userId: number) => ({ ...booking("10:00", "11:00"), start: at("10:00", day), end: at("11:00", day), userId, equipmentId: 7 });
+    const four = ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-16"].map((d) => mk(d, 1));
+    expect(repeatedBookings([...four, mk("2026-10-15", 2)], now)).toEqual([{ userId: 1, equipmentId: 7, count: 4 }]);
+    expect(repeatedBookings(four.slice(0, 3), now)).toEqual([]);
+  });
+});
+
+describe("usage history", () => {
+  const now = at("18:00");
+  const used = (from: string, to: string, back: string, extra: Partial<BookingLike> = {}) => ({
+    ...booking(from, to, { checkedOutAt: at(from), checkedInAt: at(back), ...extra }),
+    equipmentId: 1,
+    userId: 1,
+  });
+
+  it("counts hours actually out, late returns and missed bookings", async () => {
+    const { usageByItem, problemsByUser } = await import("./usage");
+    const rows = [used("10:00", "11:00", "11:00"), used("12:00", "13:00", "13:30"), { ...booking("14:00", "15:00"), equipmentId: 1, userId: 1 }];
+    const u = usageByItem(rows, now).get(1)!;
+    expect(u.uses).toBe(2);
+    expect(u.minutes).toBe(150);
+    expect(u.late).toBe(1);
+    expect(u.noShows).toBe(1);
+    expect(problemsByUser(rows, now)).toEqual([{ userId: 1, late: 1, noShows: 1 }]);
+  });
+
+  it("suggests the least-used of identical robots that is in service", async () => {
+    const { twinBalance } = await import("./usage");
+    const eq = [
+      { id: 1, name: "Go2 #1", assetId: "ROB-001", outOfService: false },
+      { id: 2, name: "Go2 #2", assetId: "ROB-001", outOfService: false },
+      { id: 3, name: "Go1", assetId: "ROB-002", outOfService: false },
+    ];
+    const usage = new Map([[1, { equipmentId: 1, uses: 5, minutes: 600, late: 0, noShows: 0, lastUsed: null }]]);
+    const [g] = twinBalance(eq, usage);
+    expect(g.suggest?.name).toBe("Go2 #2");
+    expect(twinBalance([eq[0], { ...eq[1], outOfService: true }], usage)[0].suggest?.name).toBe("Go2 #1");
+  });
+
+  it("quotes CSV cells that need it", async () => {
+    const { csv } = await import("./usage");
+    expect(csv('Arm, "big"')).toBe('"Arm, ""big"""');
+    expect(csv(null)).toBe("");
+  });
+});
+
+describe("hand-over", () => {
+  it("warns about low and flat batteries only", async () => {
+    const { needsCharge } = await import("./handover");
+    expect(["Full", "Half", "Low", "Flat", "No battery"].map(needsCharge)).toEqual([false, false, true, true, false]);
+  });
+});

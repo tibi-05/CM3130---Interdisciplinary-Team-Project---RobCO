@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db";
 import { currentUser, requestNow } from "@/lib/session";
 import { can } from "@/lib/permissions";
 import { isActive } from "@/lib/booking";
-import { fmtTime, fmtWhen } from "@/lib/time";
+import { fmtWhen } from "@/lib/time";
 import { BookingActions } from "@/components/BookingActions";
 import { EquipmentIcon } from "@/components/EquipmentIcon";
 import { Notice, one } from "@/components/Notice";
@@ -13,13 +13,15 @@ const load = (where: object) =>
   prisma.booking.findMany({ where: { cancelledAt: null, ...where }, include: { equipment: true, user: true }, orderBy: { start: "asc" } });
 
 function state(b: Row, now: Date) {
+  if (b.approval === "REJECTED") return { text: `Not approved${b.reviewNote ? `: ${b.reviewNote}` : ""}`, cls: "text-overdue" };
   if (b.checkedInAt) return { text: `Returned ${fmtWhen(b.checkedInAt, now)}`, cls: "text-neutral-700" };
   if (b.equipment.outOfService && !b.checkedOutAt && now < b.end)
     return { text: "Affected: this item is out of service. Please contact lab staff.", cls: "text-overdue" };
   if (b.checkedOutAt && now > b.end) return { text: `Overdue since ${fmtWhen(b.end, now)}`, cls: "text-overdue" };
   if (b.checkedOutAt) return { text: `Checked out, due back ${fmtWhen(b.end, now)}`, cls: "text-inuse" };
   if (now >= b.end) return { text: "Not collected", cls: "text-neutral-700" };
-  return { text: "Booked", cls: "text-booked" };
+  if (b.approval === "PENDING") return { text: "Waiting for staff approval", cls: "text-booked" };
+  return { text: b.useLocation || b.kind === "EXTENDED" ? "Booked (approved)" : "Booked", cls: "text-booked" };
 }
 
 export default async function BookingsPage({ searchParams }: PageProps<"/bookings">) {
@@ -50,8 +52,14 @@ export default async function BookingsPage({ searchParams }: PageProps<"/booking
               </Link>
               {b.equipment.assetId && <span className="font-mono text-sm text-neutral-700"> · {b.equipment.assetId}</span>}
               <p>
-                {fmtWhen(b.start, now)}–{fmtTime(b.end)}
-                {showWho && <> · {b.user.name}</>}
+                {fmtWhen(b.start, now)}–{fmtWhen(b.end, b.start)}
+                {showWho && (
+                  <>
+                    {" "}· {b.user.name}
+                    {b.user.studentId && <span className="text-neutral-700"> (ID {b.user.studentId})</span>}
+                  </>
+                )}
+                {b.useLocation && <> · at {b.useLocation}</>}
               </p>
               <p className={`text-sm font-semibold ${s.cls}`}>{s.text}</p>
             </div>

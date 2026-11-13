@@ -2,11 +2,12 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { currentUser, requestNow } from "@/lib/session";
 import { can } from "@/lib/permissions";
-import { addEquipment, setOutOfService } from "@/app/actions";
-import { LAB } from "@/lib/config";
+import { fmtDay } from "@/lib/time";
+import { addEquipment, resolveFault, setOutOfService } from "@/app/actions";
 import { Notice, one } from "@/components/Notice";
+import { EquipmentForm } from "@/components/EquipmentForm";
+import { TextField } from "@/components/Field";
 
-// Deliberately rough: exists so the rules are real, not shown on Friday.
 export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const sp = await searchParams;
   const user = await currentUser();
@@ -14,18 +15,58 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
     return <p className="mx-auto max-w-4xl px-4 py-8">Switch to Admin in the header to manage equipment.</p>;
   }
   const now = await requestNow();
-  const equipment = (
-    await prisma.equipment.findMany({
+  const [equipment, openFaults] = await Promise.all([
+    prisma.equipment.findMany({
       include: { _count: { select: { bookings: { where: { cancelledAt: null, checkedOutAt: null, end: { gt: now } } } } } },
-    })
-  ).sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+    }),
+    prisma.fault.findMany({ where: { resolvedAt: null }, include: { equipment: true, reporter: true }, orderBy: { createdAt: "desc" } }),
+  ]);
+  equipment.sort((a, b) => a.name.localeCompare(b.name, "en", { sensitivity: "base" }));
+  const types = [...new Set(equipment.map((e) => e.type))].sort();
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <Notice ok={one(sp.ok)} error={one(sp.error)} />
       <h1 className="text-3xl font-extrabold uppercase">Admin</h1>
 
-      <h2 className="mt-8 text-xl font-extrabold uppercase">Equipment</h2>
+      <section className="mt-8" aria-labelledby="faults-h" id="faults">
+        <h2 id="faults-h" className="text-xl font-extrabold uppercase">
+          Open faults
+        </h2>
+        {openFaults.length === 0 ? (
+          <p className="mt-3">No open faults.</p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {openFaults.map((f) => (
+              <li key={f.id} className={`border-l-4 p-4 ${f.severity === "UNUSABLE" ? "border-overdue bg-overdue-bg" : "border-inuse bg-inuse-bg"}`}>
+                <p>
+                  <Link href={`/equipment/${f.equipmentId}`} className="font-extrabold hover:underline">
+                    {f.equipment.name}
+                  </Link>{" "}
+                  · {f.severity === "UNUSABLE" ? "out of service" : "still usable"}
+                </p>
+                <p>{f.description}</p>
+                <p className="text-sm">
+                  Reported {fmtDay(f.createdAt)} by {f.reporter.name}
+                </p>
+                <form action={resolveFault} className="mt-3 flex flex-wrap items-end gap-3">
+                  <input type="hidden" name="faultId" value={f.id} />
+                  <input type="hidden" name="returnTo" value="/admin#faults" />
+                  <TextField label="What was done" name="resolution" maxLength={300} className="min-w-64 flex-1" />
+                  {f.equipment.outOfService && (
+                    <label className="flex items-center gap-2 font-semibold">
+                      <input type="checkbox" name="backInService" value="1" defaultChecked /> Back in service
+                    </label>
+                  )}
+                  <button className="btn">Mark resolved</button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <h2 className="mt-10 text-xl font-extrabold uppercase">Equipment</h2>
       <ul className="mt-3 divide-y divide-neutral-200 border-y border-neutral-200">
         {equipment.map((e) => (
           <li key={e.id} className="py-3">
@@ -36,6 +77,9 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                 {e.name}
               </Link>
               {e.assetId && <span className="text-sm font-mono text-neutral-700">{e.assetId}</span>}
+              <Link href={`/admin/equipment/${e.id}`} className="text-sm text-rgu-blue underline">
+                Edit<span className="sr-only"> {e.name}</span>
+              </Link>
               {e._count.bookings > 0 && (
                 <span className="text-sm">
                   {e._count.bookings} upcoming booking{e._count.bookings > 1 ? "s" : ""}
@@ -63,53 +107,9 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
       </ul>
 
       <h2 className="mt-10 text-xl font-extrabold uppercase">Add equipment</h2>
-      <form action={addEquipment} className="mt-3 grid gap-3 sm:grid-cols-2">
-        <input type="hidden" name="returnTo" value="/admin" />
-        <label className="flex flex-col gap-1 font-semibold">
-          Name
-          <input name="name" required className="field" />
-        </label>
-        <label className="flex flex-col gap-1 font-semibold">
-          Type
-          <input name="type" required list="types" className="field" />
-          <datalist id="types">
-            {[...new Set(equipment.map((e) => e.type))].map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
-        </label>
-        <label className="flex flex-col gap-1 font-semibold">
-          Location
-          <input name="location" defaultValue={LAB.location} className="field" />
-        </label>
-        <label className="flex flex-col gap-1 font-semibold">
-          Asset ID
-          <input name="assetId" placeholder="e.g. ROB-009" className="field" />
-        </label>
-        <label className="flex flex-col gap-1 font-semibold">
-          Manufacturer
-          <input name="manufacturer" className="field" />
-        </label>
-        <label className="flex flex-col gap-1 font-semibold">
-          Model
-          <input name="model" className="field" />
-        </label>
-        <label className="flex flex-col gap-1 font-semibold">
-          Serial number
-          <input name="serialNumber" className="field" />
-        </label>
-        <label className="flex flex-col gap-1 font-semibold">
-          Condition
-          <input name="condition" placeholder="e.g. Good" className="field" />
-        </label>
-        <label className="flex flex-col gap-1 font-semibold">
-          Notes
-          <input name="notes" className="field" />
-        </label>
-        <div>
-          <button className="btn">Add</button>
-        </div>
-      </form>
+      <div className="mt-3">
+        <EquipmentForm action={addEquipment} types={types} returnTo="/admin" submit="Add" />
+      </div>
     </div>
   );
 }

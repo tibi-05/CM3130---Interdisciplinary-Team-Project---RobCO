@@ -7,6 +7,7 @@ export type BookingLike = {
   checkedOutAt: Date | null;
   checkedInAt: Date | null;
   cancelledAt: Date | null;
+  approval?: string; // APPROVED (default) | PENDING | REJECTED
 };
 
 export type Status<B extends BookingLike = BookingLike> =
@@ -18,6 +19,9 @@ export type Status<B extends BookingLike = BookingLike> =
 
 export type StatusKind = Status["kind"];
 
+/** Holds the item at all: not cancelled and not turned down. Pending requests hold it until staff decide. */
+export const holdsSlot = (b: BookingLike) => !b.cancelledAt && b.approval !== "REJECTED";
+
 /** How long a booking really holds the item: returned early frees the rest, overdue holds until now. */
 export function effectiveEnd(b: BookingLike, now: Date): Date {
   if (b.checkedInAt) return b.checkedInAt;
@@ -26,12 +30,13 @@ export function effectiveEnd(b: BookingLike, now: Date): Date {
 }
 
 /** Still needs attention: upcoming, running, or checked out and not back (overdue included). */
-export const isActive = (b: BookingLike, now: Date) => !b.cancelledAt && !b.checkedInAt && (b.checkedOutAt !== null || b.end > now);
+export const isActive = (b: BookingLike, now: Date) =>
+  holdsSlot(b) && !b.checkedInAt && (b.checkedOutAt !== null || b.end > now);
 
 export const overlaps = (aStart: Date, aEnd: Date, bStart: Date, bEnd: Date) => aStart < bEnd && bStart < aEnd;
 
 export function findClash<B extends BookingLike>(start: Date, end: Date, bookings: B[], now: Date): B | undefined {
-  return bookings.find((b) => !b.cancelledAt && overlaps(start, end, b.start, effectiveEnd(b, now)));
+  return bookings.find((b) => holdsSlot(b) && overlaps(start, end, b.start, effectiveEnd(b, now)));
 }
 
 export function statusOf<B extends BookingLike>(
@@ -41,7 +46,7 @@ export function statusOf<B extends BookingLike>(
 ): Status<B> {
   if (equipment.outOfService) return { kind: "out", reason: equipment.outOfServiceReason };
 
-  const live = bookings.filter((b) => !b.cancelledAt && !b.checkedInAt);
+  const live = bookings.filter((b) => holdsSlot(b) && !b.checkedInAt);
 
   const out = live.find((b) => b.checkedOutAt);
   if (out) return now >= out.end ? { kind: "overdue", since: out.end, booking: out } : { kind: "in-use", until: out.end, booking: out };
@@ -60,21 +65,70 @@ export function checkOutBlocker(others: (BookingLike & { user: { name: string } 
   return null;
 }
 
-/** Returns a message for the person, or null when the range is allowed. */
-export function validateRange(start: Date, end: Date, now: Date, opts: { walkUp?: boolean } = {}): string | null {
+const isLabDay = (d: Date) => (LAB.workDays as readonly number[]).includes(londonParts(d).weekday);
+const inHours = (m: number) => m >= LAB.openMinutes && m <= LAB.closeMinutes;
+
+/**
+ * Returns a message for the person, or null when the range is allowed.
+ * Standard: one lab day, up to LAB.maxBookingMinutes. Extended: may span days, no maximum,
+ * but collection and return must both fall in lab hours on lab days.
+ */
+export function validateRange(
+  start: Date,
+  end: Date,
+  now: Date,
+  opts: { walkUp?: boolean; extended?: boolean } = {},
+): string | null {
   if (!(end > start)) return "The end time must be after the start time.";
   if (end <= now) return "That time has already passed.";
   if (!opts.walkUp && start.getTime() < now.getTime() - LAB.slotMinutes * 60_000) return "That start time has already passed.";
   if (start.getTime() > now.getTime() + LAB.maxWeeksAhead * 7 * 86_400_000)
     return `Bookings can be made up to ${LAB.maxWeeksAhead} weeks ahead.`;
-  if (londonDate(start) !== londonDate(end)) return "A booking has to start and end on the same day.";
-  if (!(LAB.workDays as readonly number[]).includes(londonParts(start).weekday)) return "The lab is only open Monday to Friday.";
 
   const s = minutesOfDay(start);
   const e = minutesOfDay(end);
-  if (s < LAB.openMinutes || e > LAB.closeMinutes) return "Bookings must fit within lab hours (09:00–17:00).";
+  if (opts.extended) {
+    if (!isLabDay(start) || !isLabDay(end)) return "Collection and return must both be on a weekday (Monday to Friday).";
+    if (!inHours(s) || !inHours(e)) return "Collection and return must both be within lab hours (09:00–17:00).";
+    if (s % LAB.slotMinutes || e % LAB.slotMinutes) return `Times must be on ${LAB.slotMinutes}-minute steps.`;
+    return null;
+  }
+
+  if (londonDate(start) !== londonDate(end))
+    return "A standard booking has to start and end on the same day. For several days, request an extended booking.";
+  if (!isLabDay(start)) return "The lab is only open Monday to Friday.";
+  if (!inHours(s) || !inHours(e)) return "Bookings must fit within lab hours (09:00–17:00).";
   if ((!opts.walkUp && s % LAB.slotMinutes) || e % LAB.slotMinutes) return `Times must be on ${LAB.slotMinutes}-minute steps.`;
   if (end.getTime() - start.getTime() > LAB.maxBookingMinutes * 60_000)
-    return `The longest booking is ${LAB.maxBookingMinutes / 60} hours.`;
+    return `Standard bookings are up to ${LAB.maxBookingMinutes / 60} hours. For longer, request an extended booking.`;
   return null;
+}
+
+/** Why a booking has to wait for staff approval (empty = confirmed straight away). */
+export function approvalReasons(b: { start: Date; end: Date; useLocation?: string | null; kind?: string }): string[] {
+  const reasons: string[] = [];
+  if (b.kind === "EXTENDED" || b.end.getTime() - b.start.getTime() > LAB.maxBookingMinutes * 60_000)
+    reasons.push(londonDate(b.start) === londonDate(b.end) ? "Longer than a standard booking" : "Runs over several days");
+  if (b.useLocation) reasons.push(`Leaves the lab: ${b.useLocation}`);
+  return reasons;
+}
+
+/**
+ * Fair-use flag (never a block): people who booked the same item LAB.repeatFlagCount times or more
+ * within LAB.repeatWindowDays either side of `now`.
+ */
+export function repeatedBookings<B extends BookingLike & { userId: number; equipmentId: number }>(
+  bookings: B[],
+  now: Date,
+): { userId: number; equipmentId: number; count: number }[] {
+  const window = LAB.repeatWindowDays * 86_400_000;
+  const counts = new Map<string, { userId: number; equipmentId: number; count: number }>();
+  for (const b of bookings) {
+    if (!holdsSlot(b) || Math.abs(b.start.getTime() - now.getTime()) > window) continue;
+    const key = `${b.userId}:${b.equipmentId}`;
+    const c = counts.get(key) ?? { userId: b.userId, equipmentId: b.equipmentId, count: 0 };
+    c.count++;
+    counts.set(key, c);
+  }
+  return [...counts.values()].filter((c) => c.count >= LAB.repeatFlagCount).sort((a, b) => b.count - a.count);
 }

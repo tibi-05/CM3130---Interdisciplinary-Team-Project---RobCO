@@ -3,13 +3,17 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { currentUser, requestNow } from "@/lib/session";
 import { LAB } from "@/lib/config";
-import { effectiveEnd, isActive, overlaps, statusOf } from "@/lib/booking";
-import { fmtDay, fmtTime, fmtWhen, londonDate, londonParts, londonToUtc, minutesOfDay, slotTimes, toHHMM, workWeek } from "@/lib/time";
-import { book, walkUp } from "@/app/actions";
+import { effectiveEnd, holdsSlot, isActive, overlaps, statusOf } from "@/lib/booking";
+import { fmtDay, fmtWhen, londonDate, londonParts, londonToUtc, minutesOfDay, slotTimes, toHHMM, workWeek } from "@/lib/time";
+import { BATTERY, CONDITIONS, needsCharge } from "@/lib/handover";
+import { isLate } from "@/lib/usage";
+import { book, reportFault, resolveFault, toggleWatch, walkUp } from "@/app/actions";
+import { can } from "@/lib/permissions";
 import { EquipmentIcon } from "@/components/EquipmentIcon";
 import { StatusBadge } from "@/components/StatusBadge";
 import { BookingActions } from "@/components/BookingActions";
 import { Notice, one } from "@/components/Notice";
+import { SelectField, TextArea, TextField } from "@/components/Field";
 
 const isLabDay = (d: Date) => (LAB.workDays as readonly number[]).includes(londonParts(d).weekday);
 
@@ -21,6 +25,8 @@ function defaultBookingDate(now: Date) {
   return londonDate(d);
 }
 
+const PENDING_STRIPES = { backgroundImage: "repeating-linear-gradient(135deg, var(--color-booked-bg) 0 6px, #fff 6px 12px)" };
+
 export default async function EquipmentPage({ params, searchParams }: PageProps<"/equipment/[id]">) {
   const { id } = await params;
   const sp = await searchParams;
@@ -31,15 +37,24 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
   if (!/^\d+$/.test(id)) notFound();
   const e = await prisma.equipment.findUnique({
     where: { id: Number(id) },
-    include: { bookings: { where: { cancelledAt: null }, include: { user: true }, orderBy: { start: "asc" } } },
+    include: {
+      bookings: { where: { cancelledAt: null }, include: { user: true }, orderBy: { start: "asc" } },
+      faults: { include: { reporter: true }, orderBy: { createdAt: "desc" } },
+      watches: { where: { userId: user.id } },
+    },
   });
   if (!e) notFound();
 
-  const status = statusOf(e, e.bookings, now);
+  const live = e.bookings.filter(holdsSlot);
+  const status = statusOf(e, live, now);
   const returnTo = `/equipment/${e.id}${week ? `?week=${week}` : ""}`;
   const slots = slotTimes();
   const days = workWeek(now, week);
-  const upcoming = e.bookings.filter((b) => isActive(b, now));
+  const upcoming = live.filter((b) => isActive(b, now));
+  const openFaults = e.faults.filter((f) => !f.resolvedAt);
+  const returned = e.bookings.filter((b) => b.checkedInAt).sort((a, b) => +b.checkedInAt! - +a.checkedInAt!);
+  const lastReturn = returned[0];
+  const watching = e.watches.length > 0;
 
   // Booking form defaults: the next free slot today (not one already past), else 10:00.
   const bookDate = defaultBookingDate(now);
@@ -55,6 +70,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
     return m > nowMin && m <= nextStart && m - nowMin <= LAB.maxBookingMinutes;
   });
   const canWalkUp = status.kind === "free" && isLabDay(now) && nowMin >= LAB.openMinutes && backBy.length > 0;
+  const holder = status.kind === "in-use" || status.kind === "overdue" || status.kind === "booked" ? status.booking : null;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8">
@@ -65,23 +81,39 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
         <Notice ok={one(sp.ok)} error={one(sp.error)} />
       </div>
 
+      {/* ---- Identity and status ---- */}
       <div className="flex flex-wrap items-start gap-6">
-        <EquipmentIcon type={e.type} className="size-24 text-rgu-purple" />
+        {e.photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- admin-entered URL, any host
+          <img src={e.photoUrl} alt={`Photo of ${e.name}`} className="size-28 object-cover border border-neutral-300" />
+        ) : (
+          <EquipmentIcon type={e.type} className="size-24 text-rgu-purple" />
+        )}
         <div className="flex-1 min-w-60">
           <h1 className="text-3xl font-extrabold">{e.name}</h1>
           <p className="text-neutral-700">
-            {e.type} · {e.location}
+            {e.type} · kept in {e.location}
           </p>
           <div className="mt-3">
             <StatusBadge status={status} now={now} />
           </div>
           {status.kind === "out" && status.reason && <p className="mt-2">{status.reason}</p>}
-          {(status.kind === "in-use" || status.kind === "overdue" || status.kind === "booked") && (
+          {holder && (
             <p className="mt-2">
-              {status.kind === "booked" ? "Reserved for" : "With"} {status.booking.user.name}
+              {status.kind === "booked" ? "Reserved for" : "With"} {holder.user.name}
+              {holder.useLocation && <> · taken to {holder.useLocation}</>}
             </p>
           )}
           {e.notes && <p className="mt-2 text-sm text-neutral-700 italic">{e.notes}</p>}
+          {status.kind !== "free" && status.kind !== "out" && (
+            <form action={toggleWatch} className="mt-3">
+              <input type="hidden" name="equipmentId" value={e.id} />
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <button className="btn btn-light" aria-pressed={watching}>
+                {watching ? "Stop notifying me" : "Notify me when it's free"}
+              </button>
+            </form>
+          )}
         </div>
         <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm border-l-4 border-rgu-panel pl-4 self-start">
           <dt className="font-semibold">Asset ID</dt>
@@ -94,9 +126,56 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
           <dd>{e.serialNumber ?? "Not recorded"}</dd>
           <dt className="font-semibold">Condition</dt>
           <dd>{e.condition ?? "Not recorded"}</dd>
+          <dt className="font-semibold">Manual</dt>
+          <dd>
+            {e.manualUrl ? (
+              <a href={e.manualUrl} className="text-rgu-blue underline" target="_blank" rel="noopener noreferrer">
+                Open manual<span className="sr-only"> (opens in a new tab)</span>
+              </a>
+            ) : (
+              "Not added yet"
+            )}
+          </dd>
         </dl>
       </div>
 
+      {/* ---- Things the next person must know before using it ---- */}
+      {(openFaults.length > 0 || (lastReturn && (needsCharge(lastReturn.batteryIn) || lastReturn.conditionIn !== "Good"))) && (
+        <section aria-labelledby="heads-up" className="mt-6 border-l-4 border-inuse bg-inuse-bg p-4">
+          <h2 id="heads-up" className="font-extrabold">Before you use it</h2>
+          <ul className="mt-1 list-disc pl-5">
+            {lastReturn && needsCharge(lastReturn.batteryIn) && (
+              <li>
+                Battery was <strong>{lastReturn.batteryIn?.toLowerCase()}</strong> when last returned ({fmtWhen(lastReturn.checkedInAt!, now)}). Check it
+                is charged before your session.
+              </li>
+            )}
+            {lastReturn && lastReturn.conditionIn && lastReturn.conditionIn !== "Good" && (
+              <li>Last returned as: {lastReturn.conditionIn.toLowerCase()}.</li>
+            )}
+            {openFaults.map((f) => (
+              <li key={f.id}>
+                Open fault{f.severity === "UNUSABLE" ? " (out of service)" : ""}: {f.description}{" "}
+                <span className="text-sm">({fmtDay(f.createdAt)})</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ---- Safety (client: "particularly important") ---- */}
+      <section aria-labelledby="safety" className="mt-6 border-l-4 border-rgu-purple bg-rgu-purple/5 p-4">
+        <h2 id="safety" className="text-lg font-extrabold uppercase text-rgu-purple">
+          Safety
+        </h2>
+        {e.safetyInfo ? (
+          <div className="mt-1 space-y-2 whitespace-pre-line">{e.safetyInfo}</div>
+        ) : (
+          <p className="mt-1">No safety information has been added yet. Ask lab staff before using this item.</p>
+        )}
+      </section>
+
+      {/* ---- Booking ---- */}
       {e.outOfService ? null : (
         <div className="mt-8 grid gap-6 md:grid-cols-2">
           <form action={book} className="border border-neutral-300 p-5">
@@ -104,31 +183,30 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
             <input type="hidden" name="equipmentId" value={e.id} />
             <input type="hidden" name="returnTo" value={returnTo} />
             <div className="mt-4 flex flex-wrap gap-4">
-              <label className="flex flex-col gap-1 font-semibold">
-                Date
-                <input type="date" name="date" required defaultValue={bookDate} min={londonDate(now)} className="field" />
-              </label>
-              <label className="flex flex-col gap-1 font-semibold">
-                From
-                <select name="start" className="field" defaultValue={toHHMM(defStart)}>
-                  {slots.slice(0, -1).map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1 font-semibold">
-                Until
-                <select name="end" className="field" defaultValue={toHHMM(defEnd)}>
-                  {slots.slice(1).map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-              </label>
+              <TextField label="Date" type="date" name="date" required defaultValue={bookDate} min={londonDate(now)} />
+              <SelectField label="From" name="start" options={slots.slice(0, -1)} defaultValue={toHHMM(defStart)} />
+              <SelectField label="Until" name="end" options={slots.slice(1)} defaultValue={toHHMM(defEnd)} />
+            </div>
+            <div className="mt-4 grid gap-4">
+              <TextField label="What is it for?" name="purpose" required maxLength={120} placeholder="e.g. CM2100 coursework practical" />
+              <TextField
+                label="Where will you use it? (optional)"
+                name="useLocation"
+                maxLength={120}
+                placeholder="Leave empty if staying in the lab"
+                hint="Taking it out of the lab, e.g. to room 2249 or around campus, needs staff approval."
+              />
             </div>
             <p className="mt-3 text-sm text-neutral-700">
-              Lab hours {toHHMM(LAB.openMinutes)}–{toHHMM(LAB.closeMinutes)}, Monday to Friday, up to {LAB.maxBookingMinutes / 60} hours.
+              Lab hours {toHHMM(LAB.openMinutes)}–{toHHMM(LAB.closeMinutes)}, Monday to Friday. Bookings up to {LAB.maxBookingMinutes / 60} hours in
+              the lab are confirmed straight away.
             </p>
-            <button className="btn mt-4">Book</button>
+            <div className="mt-4 flex flex-wrap items-center gap-4">
+              <button className="btn">Book</button>
+              <Link href={`/equipment/${e.id}/request`} className="text-rgu-blue underline font-semibold">
+                Need it for longer or several days?
+              </Link>
+            </div>
           </form>
 
           <form action={walkUp} className="border border-neutral-300 p-5 bg-rgu-panel/40">
@@ -137,14 +215,13 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
             <input type="hidden" name="returnTo" value={returnTo} />
             {canWalkUp ? (
               <>
-                <label className="mt-4 flex flex-col gap-1 font-semibold w-fit">
-                  Back by
-                  <select name="backBy" className="field">
-                    {backBy.map((t) => (
-                      <option key={t}>{t}</option>
-                    ))}
-                  </select>
-                </label>
+                <p className="mt-2 text-sm">For use in the lab only. Record the condition as you pick it up.</p>
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <SelectField label="Back by" name="backBy" options={backBy} />
+                  <TextField label="What is it for?" name="purpose" required maxLength={120} />
+                  <SelectField label="Condition now" name="conditionOut" options={CONDITIONS.slice(0, 2)} />
+                  <SelectField label="Battery now" name="batteryOut" options={BATTERY} />
+                </div>
                 <button className="btn mt-4">Check out now</button>
               </>
             ) : (
@@ -156,6 +233,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
         </div>
       )}
 
+      {/* ---- Week calendar ---- */}
       <section className="mt-10" aria-labelledby="week">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 id="week" className="text-xl font-extrabold uppercase">
@@ -177,6 +255,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
         </div>
         <div className="mt-4 flex flex-wrap gap-4 text-sm">
           <Legend className="bg-booked-bg border-booked" label="Booked" />
+          <Legend className="border-booked" style={PENDING_STRIPES} label="Awaiting approval" />
           <Legend className="bg-inuse-bg border-inuse" label="Checked out" />
           <Legend className="bg-overdue-bg border-overdue" label="Overdue" />
         </div>
@@ -201,29 +280,34 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                   {days.map((d) => {
                     const start = londonToUtc(d, t);
                     const end = new Date(start.getTime() + LAB.slotMinutes * 60_000);
-                    const b = e.bookings.find((x) => overlaps(start, end, x.start, effectiveEnd(x, now)));
+                    const b = live.find((x) => overlaps(start, end, x.start, effectiveEnd(x, now)));
                     const past = end <= now;
+                    const pending = b?.approval === "PENDING";
                     const tone = !b
                       ? "border-neutral-200"
                       : b.checkedOutAt && !b.checkedInAt && now > b.end
                         ? "bg-overdue-bg border-overdue"
                         : b.checkedOutAt
                           ? "bg-inuse-bg border-inuse"
-                          : "bg-booked-bg border-booked";
-                    const first = b && start <= b.start ? true : b && t === slots[0];
+                          : pending
+                            ? "border-booked"
+                            : "bg-booked-bg border-booked";
+                    const first = b && (start <= b.start || t === slots[0]);
+                    const word = !b ? "free" : pending ? "awaiting approval for" : b.checkedOutAt ? "checked out by" : "booked by";
                     return (
                       <td
                         key={d}
                         className={`h-7 border-l-4 border-b border-b-white px-1 ${tone} ${past ? "opacity-50" : ""}`}
-                        title={b ? `${b.user.name}, ${fmtTime(b.start)}–${fmtTime(b.end)}` : `${t} free`}
+                        style={pending ? PENDING_STRIPES : undefined}
+                        title={b ? `${b.user.name}, ${fmtWhen(b.start, now)}–${fmtWhen(b.end, now)}${pending ? " (awaiting approval)" : ""}` : `${t} free`}
                       >
                         {b && first && (
                           <span className="font-semibold truncate block" aria-hidden="true">
                             {b.user.name.split(" ")[0]}
                           </span>
                         )}
-                        {/* Words, not just colour, for screen readers in every booked cell */}
-                        <span className="sr-only">{b ? `${t} ${b.checkedOutAt ? "checked out" : "booked"} by ${b.user.name}` : `${t} free`}</span>
+                        {/* Words, not just colour, for screen readers in every cell */}
+                        <span className="sr-only">{b ? `${t} ${word} ${b.user.name}` : `${t} free`}</span>
                       </td>
                     );
                   })}
@@ -234,6 +318,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
         </div>
       </section>
 
+      {/* ---- Current and upcoming bookings ---- */}
       <section className="mt-10" aria-labelledby="upcoming">
         <h2 id="upcoming" className="text-xl font-extrabold uppercase">
           Current and upcoming
@@ -246,9 +331,12 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
               <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
                 <span>
                   <span className="font-semibold">
-                    {fmtWhen(b.start, now)}–{fmtTime(b.end)}
+                    {fmtWhen(b.start, now)}–{fmtWhen(b.end, b.start)}
                   </span>{" "}
                   · {b.user.name}
+                  {b.purpose && <> · {b.purpose}</>}
+                  {b.useLocation && <> · at {b.useLocation}</>}
+                  {b.approval === "PENDING" && <span className="text-booked font-semibold"> · awaiting approval</span>}
                   {b.checkedOutAt && now > b.end && <span className="text-overdue font-semibold"> · overdue</span>}
                   {b.checkedOutAt && now <= b.end && <span className="text-inuse font-semibold"> · checked out</span>}
                   {e.outOfService && !b.checkedOutAt && <span className="text-overdue font-semibold"> · affected: item out of service</span>}
@@ -257,6 +345,108 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      {/* ---- Faults ---- */}
+      <section className="mt-10 grid gap-6 md:grid-cols-2" aria-labelledby="faults">
+        <div>
+          <h2 id="faults" className="text-xl font-extrabold uppercase">
+            Faults and maintenance
+          </h2>
+          {e.faults.length === 0 ? (
+            <p className="mt-3">No faults reported.</p>
+          ) : (
+            <ul className="mt-3 divide-y divide-neutral-200 border-y border-neutral-200">
+              {e.faults.slice(0, 8).map((f) => (
+                <li key={f.id} className="py-3">
+                  <p>
+                    <span className={`font-semibold ${f.resolvedAt ? "text-free" : f.severity === "UNUSABLE" ? "text-overdue" : "text-inuse"}`}>
+                      {f.resolvedAt ? "Resolved" : f.severity === "UNUSABLE" ? "Open, out of service" : "Open"}
+                    </span>{" "}
+                    · {f.description}
+                  </p>
+                  <p className="text-sm text-neutral-700">
+                    Reported {fmtDay(f.createdAt)} by {f.reporter.name}
+                    {f.resolvedAt && <> · fixed {fmtDay(f.resolvedAt)}{f.resolution ? `: ${f.resolution}` : ""}</>}
+                  </p>
+                  {!f.resolvedAt && can.resolveFaults(user) && (
+                    <form action={resolveFault} className="mt-2 flex flex-wrap items-end gap-2">
+                      <input type="hidden" name="faultId" value={f.id} />
+                      <input type="hidden" name="returnTo" value={returnTo} />
+                      <TextField label="What was done" name="resolution" maxLength={300} className="min-w-48 flex-1 text-sm" />
+                      {e.outOfService && (
+                        <label className="flex items-center gap-2 text-sm font-semibold">
+                          <input type="checkbox" name="backInService" value="1" defaultChecked /> Back in service
+                        </label>
+                      )}
+                      <button className="btn">Resolve</button>
+                    </form>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <form action={reportFault} className="border border-neutral-300 p-5 self-start">
+          <h3 className="text-lg font-extrabold uppercase">Report a fault</h3>
+          <input type="hidden" name="equipmentId" value={e.id} />
+          <input type="hidden" name="returnTo" value={returnTo} />
+          <div className="mt-3 grid gap-4">
+            <TextArea label="What's wrong?" name="description" required minLength={5} maxLength={500} />
+            <fieldset>
+              <legend className="font-semibold">Can it still be used?</legend>
+              <label className="mt-1 flex items-center gap-2">
+                <input type="radio" name="severity" value="MINOR" defaultChecked /> Yes, with care
+              </label>
+              <label className="flex items-center gap-2">
+                <input type="radio" name="severity" value="UNUSABLE" /> No, take it out of service
+              </label>
+            </fieldset>
+          </div>
+          <button className="btn mt-4">Report fault</button>
+        </form>
+      </section>
+
+      {/* ---- Usage history (client: condition before and after use) ---- */}
+      <section className="mt-10" aria-labelledby="history">
+        <h2 id="history" className="text-xl font-extrabold uppercase">
+          Recent use
+        </h2>
+        {returned.length === 0 ? (
+          <p className="mt-3">Not used yet.</p>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[560px] text-sm">
+              <thead>
+                <tr className="border-b-2 border-neutral-300 text-left">
+                  <th scope="col" className="py-2 pr-3">Returned</th>
+                  <th scope="col" className="py-2 pr-3">By</th>
+                  <th scope="col" className="py-2 pr-3">Condition out → in</th>
+                  <th scope="col" className="py-2 pr-3">Battery out → in</th>
+                  <th scope="col" className="py-2">Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returned.slice(0, 8).map((b) => (
+                  <tr key={b.id} className="border-b border-neutral-200 align-top">
+                    <td className="py-2 pr-3">
+                      {fmtWhen(b.checkedInAt!, now)}
+                      {isLate(b, now) && <span className="block font-semibold text-overdue">Late</span>}
+                    </td>
+                    <td className="py-2 pr-3">{b.user.name}</td>
+                    <td className="py-2 pr-3">
+                      {b.conditionOut ?? "–"} → {b.conditionIn ?? "–"}
+                    </td>
+                    <td className={`py-2 pr-3 ${needsCharge(b.batteryIn) ? "font-semibold text-overdue" : ""}`}>
+                      {b.batteryOut ?? "–"} → {b.batteryIn ?? "–"}
+                    </td>
+                    <td className="py-2">{b.returnNote ?? ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </section>
     </div>
@@ -275,10 +465,10 @@ function WeekLink({ id, week, disabled, children }: { id: number; week: number; 
   );
 }
 
-function Legend({ className, label }: { className: string; label: string }) {
+function Legend({ className, label, style }: { className: string; label: string; style?: React.CSSProperties }) {
   return (
     <span className="flex items-center gap-2">
-      <span className={`inline-block size-4 border-l-4 ${className}`} aria-hidden="true" />
+      <span className={`inline-block size-4 border-l-4 ${className}`} style={style} aria-hidden="true" />
       {label}
     </span>
   );
