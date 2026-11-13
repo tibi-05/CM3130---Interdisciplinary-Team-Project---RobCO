@@ -1,76 +1,77 @@
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: brand (RGU, kept) · redesign: full
+ * paper: #ffffff · ink: #000000 · surface: absolute · accent: #007abf (RGU blue) · display: Outfit 800, uppercase · body: Outfit 400/600
+ * nav: kept top bar, current page marked · signature: the equipment board's status tally · states: full, empty, error and success notices
+ * axes: light/geometric-sans/cool · posture: committed (purple chrome, angled title panels on panel blue) · contrast: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P4 H4 E4 S4 R4 V3 · weakest: V, the shell and the RGU motifs are fixed by the client, so variety comes from each screen's composition, not its chrome */
+/* Hallmark · waive 7b · surface: absolute, black body text on white paper passes 40 and 41 at 21:1 · RGU's own brand rule for the lab is black text on white, so the ink stays pure */
+/* Hallmark · dismissed 70 · every form posts to a real server action in src/app/actions.ts; the flagged strings are labels and a stripe style */
 @import "tailwindcss";
-
-/* RGU look: colours taken from rgu.ac.uk. Outfit stands in for Zona Pro (licensed). */
-@theme {
-  --font-sans: var(--font-outfit), Helvetica, Arial, sans-serif;
-
-  --color-rgu-purple: #712177;
-  --color-rgu-purple-dark: #571046;
-  --color-rgu-blue: #007abf;
-  --color-rgu-blue-dark: #006b99;
-  --color-rgu-blue-light: #bae0f5;
-  --color-rgu-panel: #d0eaf8;
-
-  /* Status colours stay away from brand purple so it never reads as a state */
-  --color-free: #1b6e35;
-  --color-free-bg: #dff2e5;
-  --color-inuse: #7a4a00;
-  --color-inuse-bg: #ffefcc;
-  --color-booked: #005f9d;
-  --color-booked-bg: #d0eaf8;
-  --color-overdue: #a51d1d;
-  --color-overdue-bg: #fde2e0;
-  --color-out: #444444;
-  --color-out-bg: #e8e8e8;
-}
-
-body {
-  background: #ffffff;
-  color: #000000;
-}
-
-:focus-visible {
-  outline: 3px solid var(--color-rgu-blue);
-  outline-offset: 2px;
-}
+@import "./tokens.css";
+@import "./base.css" layer(base);
 
 /* On the purple header the blue ring is too faint (2:1); white is 9:1 */
 header :focus-visible {
-  outline-color: #fff;
+  outline-color: var(--color-on-brand);
+}
+
+input[type="radio"],
+input[type="checkbox"] {
+  accent-color: var(--color-rgu-purple);
+}
+
+/* Native disabled fields: three channels (the attribute, opacity, cursor) */
+:where(input, select, textarea):disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* Pressed chips and options darken one step */
+:where(.chip, .option):active {
+  background: var(--color-paper-2);
 }
 
 /* RGU buttons: square, uppercase, extra bold, right edge cut at 45° */
 @utility btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
-  padding: 0.65rem 1.9rem 0.65rem 1.1rem;
+  min-height: var(--hit);
+  padding: 0.6rem 1.9rem 0.6rem 1.1rem;
   font-weight: 800;
   font-size: 0.8125rem;
+  line-height: 1.2;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
   background: var(--color-rgu-blue);
-  color: #fff;
+  color: var(--color-accent-ink);
   clip-path: polygon(0 0, 100% 0, calc(100% - 14px) 100%, 0 100%);
   cursor: pointer;
+  transition: background-color var(--dur-micro) var(--ease-out);
   &:hover {
     background: var(--color-rgu-blue-dark);
+  }
+  &:active {
+    transform: translateY(1px);
   }
   /* clip-path hides outlines, so draw the focus ring inside the shape */
   &:focus-visible {
     outline: none;
-    box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 6px #000;
+    box-shadow: inset 0 0 0 3px var(--color-paper), inset 0 0 0 6px var(--color-ink);
   }
+  &:disabled,
   &[aria-disabled="true"] {
-    background: #c9c9c9;
-    color: #3d3d3d;
+    background: var(--color-disabled);
+    color: var(--color-disabled-ink);
+    cursor: not-allowed;
     pointer-events: none;
   }
 }
 
 @utility btn-light {
   background: var(--color-rgu-blue-light);
-  color: #000;
+  color: var(--color-ink);
   &:hover {
     background: var(--color-rgu-panel);
   }
@@ -79,7 +80,7 @@ header :focus-visible {
 @utility btn-danger {
   background: var(--color-overdue);
   &:hover {
-    background: #831515;
+    background: var(--color-overdue-dark);
   }
 }
 
@@ -89,8 +90,106 @@ header :focus-visible {
 }
 
 @utility field {
-  border: 1px solid #6b6b6b;
-  padding: 0.5rem 0.6rem;
-  background: #fff;
+  min-height: var(--hit);
+  border: 1px solid var(--color-edge);
+  padding: 0.5rem 0.65rem;
+  background: var(--color-paper);
+  color: var(--color-ink);
   font: inherit;
+  &:hover {
+    border-color: var(--color-ink);
+  }
+}
+
+/* Inline link in body text */
+@utility link {
+  color: var(--color-rgu-blue);
+  font-weight: 600;
+  text-decoration: underline;
+  &:hover {
+    color: var(--color-rgu-blue-dark);
+    text-decoration-thickness: 2px;
+  }
+}
+
+/* Section heading inside a page */
+@utility section-title {
+  font-size: var(--text-xl);
+  font-weight: 800;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+/* A bordered working surface: a form, a request, a panel of its own. Sets no background, so bg-* can tint it. */
+@utility panel {
+  border: 1px solid var(--color-rule);
+  padding: 1.25rem;
+}
+
+/* Filter chip: square, selected = purple */
+@utility chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--color-edge);
+  background: var(--color-paper);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  &:hover {
+    border-color: var(--color-rgu-purple);
+    box-shadow: inset 0 0 0 1px var(--color-rgu-purple);
+  }
+  &[aria-current] {
+    background: var(--color-rgu-purple);
+    border-color: var(--color-rgu-purple);
+    color: var(--color-on-brand);
+  }
+  @media (pointer: coarse) {
+    min-height: var(--hit);
+  }
+}
+
+/* Facts in a row, parted by hairlines rather than dots. The first hairline of every line is clipped. */
+@utility meta {
+  display: flex;
+  flex-wrap: wrap;
+  overflow: clip;
+  margin-left: -0.6rem;
+  & > * {
+    margin-left: -1px;
+    padding-inline: 0.6rem;
+    border-left: 1px solid currentColor;
+  }
+}
+
+/* A choice drawn as a tappable row: radio or checkbox inside a label */
+@utility option {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: var(--hit);
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--color-edge);
+  background: var(--color-paper);
+  cursor: pointer;
+  &:hover {
+    border-color: var(--color-rgu-purple);
+  }
+  &:has(:checked) {
+    border-color: var(--color-rgu-purple);
+    box-shadow: inset 0 0 0 1px var(--color-rgu-purple);
+    background: var(--color-paper-2);
+    font-weight: 600;
+  }
+  &:has(:focus-visible) {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+  & input {
+    width: 1.15rem;
+    height: 1.15rem;
+    flex-shrink: 0;
+  }
 }
