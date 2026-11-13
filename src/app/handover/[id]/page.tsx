@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { currentUser, requestNow } from "@/lib/session";
@@ -9,6 +8,7 @@ import { checkIn, checkOut } from "@/app/actions";
 import { EquipmentIcon } from "@/components/EquipmentIcon";
 import { Notice, one } from "@/components/Notice";
 import { TextArea } from "@/components/Field";
+import { BackLink, PageHead } from "@/components/PageHead";
 
 // Collection and return in one place, with a 20-second condition check each way
 // (client: record condition before and after use; flat batteries delayed the next user).
@@ -27,73 +27,82 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
   const late = returning && now > b.end;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
-      <Link href="/bookings" className="text-rgu-blue underline font-semibold">
-        ← My bookings
-      </Link>
-      <div className="mt-4">
-        <Notice ok={one(sp.ok)} error={one(sp.error)} />
-      </div>
-      <div className="flex items-center gap-4">
-        <EquipmentIcon type={b.equipment.type} className="size-14 text-rgu-purple" />
-        <div>
-          <h1 className="text-3xl font-extrabold">{done ? "Already returned" : returning ? "Return" : "Collect"}</h1>
-          <p className="text-neutral-700">
-            {b.equipment.name} · {fmtWhen(b.start, now)}–{fmtWhen(b.end, b.start)}
-            {b.user.id !== user.id && <> · booked by {b.user.name}</>}
-          </p>
+    <>
+      <PageHead
+        back={<BackLink href="/bookings">My bookings</BackLink>}
+        title={done ? "Already returned" : returning ? "Return" : "Collect"}
+        sub={
+          <ul className="meta text-base">
+            <li>{b.equipment.name}</li>
+            <li>
+              {fmtWhen(b.start, now)} to {fmtWhen(b.end, b.start)}
+            </li>
+            {b.user.id !== user.id && <li>Booked by {b.user.name}</li>}
+          </ul>
+        }
+        aside={
+          <span className="hidden bg-paper p-3 sm:block">
+            <EquipmentIcon type={b.equipment.type} className="size-16 text-rgu-purple" />
+          </span>
+        }
+      />
+
+      <div className="mx-auto max-w-6xl px-4 pt-6">
+        <div className="max-w-2xl">
+          <Notice ok={one(sp.ok)} error={one(sp.error)} />
+          {done ? (
+            <p>This booking was checked in {fmtWhen(b.checkedInAt!, now)}.</p>
+          ) : (
+            <form action={returning ? checkIn : checkOut} className="panel sm:p-6">
+              <input type="hidden" name="bookingId" value={b.id} />
+              <input type="hidden" name="returnTo" value={`/handover/${b.id}`} />
+              {late && (
+                <p className="mb-4 border-l-4 border-overdue bg-overdue-bg p-3 font-semibold text-overdue">
+                  It was due back {fmtWhen(b.end, now)}. It will be recorded as a late return.
+                </p>
+              )}
+              {returning && needsCharge(b.batteryOut) && (
+                <p className="mb-4 text-sm">The battery was {b.batteryOut?.toLowerCase()} when you collected it.</p>
+              )}
+              <p className="text-lg">
+                {returning ? "Quick check before you hand it back." : "Quick check before you take it."} This helps the next person.
+              </p>
+
+              <fieldset className="mt-5 grid gap-2">
+                <legend className="mb-2 text-lg font-extrabold uppercase">Condition</legend>
+                {CONDITIONS.map((c, i) => (
+                  <label key={c} className="option">
+                    <input type="radio" name="condition" value={c} defaultChecked={i === 0} required /> {c}
+                  </label>
+                ))}
+              </fieldset>
+              <fieldset className="mt-6">
+                <legend className="mb-2 text-lg font-extrabold uppercase">Battery</legend>
+                <div className="flex flex-wrap gap-2">
+                  {BATTERY.map((v) => (
+                    <label key={v} className="option">
+                      <input type="radio" name="battery" value={v} required /> {v}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <TextArea
+                className="mt-6"
+                label="Notes (optional)"
+                name="note"
+                maxLength={500}
+                hint={returning ? "Anything the next person or lab staff should know." : "Describe anything that isn't right."}
+              />
+              <p className="mt-4 text-sm text-muted">
+                {returning
+                  ? "Anything other than Good is passed to lab staff as a fault report. Low or flat batteries alert staff to charge it."
+                  : "If it's damaged or not working, it won't be checked out: the fault is recorded and staff are told."}
+              </p>
+              <button className="btn mt-5">{returning ? "Check in" : "Check out"}</button>
+            </form>
+          )}
         </div>
       </div>
-
-      {done ? (
-        <p className="mt-6">This booking was checked in {fmtWhen(b.checkedInAt!, now)}.</p>
-      ) : (
-        <form action={returning ? checkIn : checkOut} className="mt-6 border border-neutral-300 p-5">
-          <input type="hidden" name="bookingId" value={b.id} />
-          <input type="hidden" name="returnTo" value={`/handover/${b.id}`} />
-          {late && (
-            <p className="mb-4 border-l-4 border-overdue bg-overdue-bg p-3 font-semibold text-overdue">
-              It was due back {fmtWhen(b.end, now)}. It will be recorded as a late return.
-            </p>
-          )}
-          {returning && needsCharge(b.batteryOut) && (
-            <p className="mb-4 text-sm">The battery was {b.batteryOut?.toLowerCase()} when you collected it.</p>
-          )}
-          <p>{returning ? "Quick check before you hand it back." : "Quick check before you take it."} This helps the next person.</p>
-
-          <fieldset className="mt-4">
-            <legend className="font-extrabold">Condition</legend>
-            {CONDITIONS.map((c, i) => (
-              <label key={c} className="mt-1 flex items-center gap-2">
-                <input type="radio" name="condition" value={c} defaultChecked={i === 0} required /> {c}
-              </label>
-            ))}
-          </fieldset>
-          <fieldset className="mt-4">
-            <legend className="font-extrabold">Battery</legend>
-            <div className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
-              {BATTERY.map((v) => (
-                <label key={v} className="flex items-center gap-2">
-                  <input type="radio" name="battery" value={v} required /> {v}
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <TextArea
-            className="mt-4"
-            label="Notes (optional)"
-            name="note"
-            maxLength={500}
-            hint={returning ? "Anything the next person or lab staff should know." : "Describe anything that isn't right."}
-          />
-          <p className="mt-3 text-sm text-neutral-700">
-            {returning
-              ? "Anything other than Good is passed to lab staff as a fault report. Low or flat batteries alert staff to charge it."
-              : "If it's damaged or not working, it won't be checked out: the fault is recorded and staff are told."}
-          </p>
-          <button className="btn mt-4">{returning ? "Check in" : "Check out"}</button>
-        </form>
-      )}
-    </div>
+    </>
   );
 }

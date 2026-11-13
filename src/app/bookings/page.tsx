@@ -7,6 +7,7 @@ import { fmtWhen } from "@/lib/time";
 import { BookingActions } from "@/components/BookingActions";
 import { EquipmentIcon } from "@/components/EquipmentIcon";
 import { Notice, one } from "@/components/Notice";
+import { PageHead } from "@/components/PageHead";
 
 type Row = Awaited<ReturnType<typeof load>>[number];
 const load = (where: object) =>
@@ -14,12 +15,12 @@ const load = (where: object) =>
 
 function state(b: Row, now: Date) {
   if (b.approval === "REJECTED") return { text: `Not approved${b.reviewNote ? `: ${b.reviewNote}` : ""}`, cls: "text-overdue" };
-  if (b.checkedInAt) return { text: `Returned ${fmtWhen(b.checkedInAt, now)}`, cls: "text-neutral-700" };
+  if (b.checkedInAt) return { text: `Returned ${fmtWhen(b.checkedInAt, now)}`, cls: "text-muted" };
   if (b.equipment.outOfService && !b.checkedOutAt && now < b.end)
     return { text: "Affected: this item is out of service. Please contact lab staff.", cls: "text-overdue" };
   if (b.checkedOutAt && now > b.end) return { text: `Overdue since ${fmtWhen(b.end, now)}`, cls: "text-overdue" };
   if (b.checkedOutAt) return { text: `Checked out, due back ${fmtWhen(b.end, now)}`, cls: "text-inuse" };
-  if (now >= b.end) return { text: "Not collected", cls: "text-neutral-700" };
+  if (now >= b.end) return { text: "Not collected", cls: "text-muted" };
   if (b.approval === "PENDING") return { text: "Waiting for staff approval", cls: "text-booked" };
   return { text: b.useLocation || b.kind === "EXTENDED" ? "Booked (approved)" : "Booked", cls: "text-booked" };
 }
@@ -40,27 +41,31 @@ export default async function BookingsPage({ searchParams }: PageProps<"/booking
   const upcomingOthers = others.filter((b) => !b.checkedOutAt && b.userId !== user.id);
 
   const list = (rows: Row[], showWho = false) => (
-    <ul className="mt-3 divide-y divide-neutral-200 border-y border-neutral-200">
+    <ul className="mt-4 divide-y divide-rule border-y border-rule">
       {rows.map((b) => {
         const s = state(b, now);
         return (
-          <li key={b.id} className="flex flex-wrap items-center gap-4 py-4">
+          <li key={b.id} className="flex flex-wrap items-center gap-x-4 gap-y-3 py-4">
             <EquipmentIcon type={b.equipment.type} className="size-10 text-rgu-purple shrink-0" />
             <div className="flex-1 min-w-52">
-              <Link href={`/equipment/${b.equipmentId}`} className="font-extrabold hover:underline">
-                {b.equipment.name}
-              </Link>
-              {b.equipment.assetId && <span className="font-mono text-sm text-neutral-700"> · {b.equipment.assetId}</span>}
               <p>
-                {fmtWhen(b.start, now)}–{fmtWhen(b.end, b.start)}
-                {showWho && (
-                  <>
-                    {" "}· {b.user.name}
-                    {b.user.studentId && <span className="text-neutral-700"> (ID {b.user.studentId})</span>}
-                  </>
-                )}
-                {b.useLocation && <> · at {b.useLocation}</>}
+                <Link href={`/equipment/${b.equipmentId}`} className="font-extrabold underline-offset-4 hover:underline">
+                  {b.equipment.name}
+                </Link>
+                {b.equipment.assetId && <span className="ml-2 font-mono text-sm text-muted">{b.equipment.assetId}</span>}
               </p>
+              <ul className="meta">
+                <li className="tabular-nums">
+                  {fmtWhen(b.start, now)} to {fmtWhen(b.end, b.start)}
+                </li>
+                {showWho && (
+                  <li>
+                    {b.user.name}
+                    {b.user.studentId && <span className="text-muted"> (ID {b.user.studentId})</span>}
+                  </li>
+                )}
+                {b.useLocation && <li>At {b.useLocation}</li>}
+              </ul>
               <p className={`text-sm font-semibold ${s.cls}`}>{s.text}</p>
             </div>
             <BookingActions booking={b} user={user} now={now} returnTo="/bookings" itemOutOfService={b.equipment.outOfService} />
@@ -71,38 +76,45 @@ export default async function BookingsPage({ searchParams }: PageProps<"/booking
   );
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
-      <Notice ok={one(sp.ok)} error={one(sp.error)} />
-      <h1 className="text-3xl font-extrabold uppercase">My bookings</h1>
-      {current.length ? (
-        list(current)
-      ) : (
-        <p className="mt-3">
-          Nothing booked. <Link href="/" className="text-rgu-blue underline font-semibold">Find equipment</Link>
-        </p>
-      )}
+    <>
+      <PageHead title="My bookings" />
+      <div className="mx-auto max-w-6xl px-4 pt-6">
+        <div className="max-w-4xl">
+          <Notice ok={one(sp.ok)} error={one(sp.error)} />
+          {current.length ? (
+            list(current)
+          ) : (
+            <p className="mt-3">
+              Nothing booked.{" "}
+              <Link href="/" className="link">
+                Find equipment
+              </Link>
+            </p>
+          )}
 
-      {staff && (
-        <section className="mt-12">
-          <h2 className="text-xl font-extrabold uppercase">Out now</h2>
-          <p className="text-sm text-neutral-700">Everything checked out of the lab, overdue first. Staff can check items in for anyone.</p>
-          {outNow.length ? list(outNow, true) : <p className="mt-3">Nothing is out right now.</p>}
-        </section>
-      )}
+          {staff && (
+            <section className="mt-12 border-t border-rule pt-8">
+              <h2 className="section-title">Out now</h2>
+              <p className="mt-1 text-sm text-muted">Everything checked out of the lab, overdue first. Staff can check items in for anyone.</p>
+              {outNow.length ? list(outNow, true) : <p className="mt-3">Nothing is out right now.</p>}
+            </section>
+          )}
 
-      {upcomingOthers.length > 0 && (
-        <section className="mt-12">
-          <h2 className="text-xl font-extrabold uppercase">Everyone else&apos;s bookings</h2>
-          {list(upcomingOthers, true)}
-        </section>
-      )}
+          {upcomingOthers.length > 0 && (
+            <section className="mt-12 border-t border-rule pt-8">
+              <h2 className="section-title">Everyone else&apos;s bookings</h2>
+              {list(upcomingOthers, true)}
+            </section>
+          )}
 
-      {past.length > 0 && (
-        <section className="mt-12">
-          <h2 className="text-xl font-extrabold uppercase">Recent</h2>
-          {list(past)}
-        </section>
-      )}
-    </div>
+          {past.length > 0 && (
+            <section className="mt-12 border-t border-rule pt-8">
+              <h2 className="section-title">Recent</h2>
+              {list(past)}
+            </section>
+          )}
+        </div>
+      </div>
+    </>
   );
 }

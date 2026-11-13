@@ -31,9 +31,10 @@ export function statusText(s: Status, now: Date) {
   }
 }
 
-export function StatusBadge({ status, now }: { status: Status; now: Date }) {
+export function StatusBadge({ status, now, size = "md" }: { status: Status; now: Date; size?: "md" | "lg" }) {
+  const box = size === "lg" ? "border-l-[6px] px-3 py-1.5 text-lg" : "border-l-4 px-2 py-1 text-sm";
   return (
-    <span className={`inline-flex items-center gap-1.5 border-l-4 px-2 py-0.5 text-sm font-semibold ${STYLE[status.kind]}`}>
+    <span className={`inline-flex items-center gap-1.5 leading-tight font-semibold ${box} ${STYLE[status.kind]}`}>
       {statusText(status, now)}
     </span>
   );

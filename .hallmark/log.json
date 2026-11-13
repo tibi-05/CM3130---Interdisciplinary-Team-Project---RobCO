@@ -1,0 +1,29 @@
+[
+ {
+  "mode": "redesign",
+  "depth": "full",
+  "scope": "app",
+  "shape": "app screen",
+  "theme": "brand (RGU)",
+  "axes": "light/geometric-sans/cool",
+  "hero": "none (app)",
+  "nav": "kept top bar, current page marked",
+  "footer": "purple band, name and facts",
+  "imagery": "drawn equipment icons (kept)",
+  "photos": [],
+  "entry": "angled title panel on panel blue",
+  "fingerprint": "app/brand/title-band/hairline-sections/panels/status-tally",
+  "sections": [
+   "page head",
+   "status tally",
+   "filters",
+   "equipment grid"
+  ],
+  "signature": "the equipment board status tally",
+  "waived": [
+   "7b"
+  ],
+  "prompt": "University robotics lab equipment booking app",
+  "date": "2026-11-13"
+ }
+]

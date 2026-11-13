@@ -4,6 +4,7 @@ import { currentUser, requestNow } from "@/lib/session";
 import { fmtWhen } from "@/lib/time";
 import { markAllRead } from "@/app/actions";
 import { Notice, one } from "@/components/Notice";
+import { PageHead } from "@/components/PageHead";
 
 const KIND_LABEL: Record<string, string> = {
   REMINDER: "Reminder",
@@ -28,43 +29,48 @@ export default async function InboxPage({ searchParams }: PageProps<"/inbox">) {
   const unread = notes.filter((n) => !n.readAt).length;
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
-      <Notice ok={one(sp.ok)} error={one(sp.error)} />
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-extrabold uppercase">Inbox</h1>
-          <p className="text-neutral-700">
-            Reminders and alerts for {user.name} ({user.email}). In the live system these are also emailed.
-          </p>
+    <>
+      <PageHead
+        title="Inbox"
+        sub={`Reminders and alerts for ${user.name} (${user.email}). In the live system these are also emailed.`}
+        aside={
+          unread > 0 && (
+            <form action={markAllRead}>
+              <input type="hidden" name="returnTo" value="/inbox" />
+              <button className="btn">Mark all as read</button>
+            </form>
+          )
+        }
+      />
+      <div className="mx-auto max-w-6xl px-4 pt-6">
+        <div className="max-w-3xl">
+          <Notice ok={one(sp.ok)} error={one(sp.error)} />
+          {notes.length === 0 ? (
+            <p>Nothing yet.</p>
+          ) : (
+            <ul className="divide-y divide-rule border-y border-rule">
+              {notes.map((n) => (
+                <li key={n.id} className={`py-4 pr-2 ${n.readAt ? "pl-4" : "border-l-4 border-l-rgu-purple pl-3"}`}>
+                  <h2 className={`text-lg leading-snug ${n.readAt ? "font-semibold" : "font-extrabold"}`}>{n.subject}</h2>
+                  <ul className="meta mt-0.5 text-sm">
+                    <li className={n.readAt ? "text-muted" : "font-semibold"}>{KIND_LABEL[n.kind] ?? n.kind}</li>
+                    <li className="text-muted tabular-nums">
+                      <time dateTime={n.createdAt.toISOString()}>{fmtWhen(n.createdAt, now)}</time>
+                      {!n.readAt && <span className="sr-only"> (unread)</span>}
+                    </li>
+                  </ul>
+                  <p className="mt-1">{n.body}</p>
+                  {n.link && (
+                    <Link href={n.link} className="link mt-1 inline-flex min-h-11 items-center">
+                      Open
+                    </Link>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-        {unread > 0 && (
-          <form action={markAllRead}>
-            <input type="hidden" name="returnTo" value="/inbox" />
-            <button className="btn btn-light">Mark all as read</button>
-          </form>
-        )}
       </div>
-      {notes.length === 0 ? (
-        <p className="mt-6">Nothing yet.</p>
-      ) : (
-        <ul className="mt-6 divide-y divide-neutral-200 border-y border-neutral-200">
-          {notes.map((n) => (
-            <li key={n.id} className={`py-4 ${n.readAt ? "" : "border-l-4 border-rgu-purple pl-3"}`}>
-              <p className="text-sm text-neutral-700">
-                <span className="font-semibold text-black">{KIND_LABEL[n.kind] ?? n.kind}</span> · {fmtWhen(n.createdAt, now)}
-                {!n.readAt && <span className="sr-only"> (unread)</span>}
-              </p>
-              <h2 className={n.readAt ? "font-semibold" : "font-extrabold"}>{n.subject}</h2>
-              <p className="mt-1">{n.body}</p>
-              {n.link && (
-                <Link href={n.link} className="mt-1 inline-block text-rgu-blue underline font-semibold">
-                  Open
-                </Link>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    </>
   );
 }

@@ -6,8 +6,18 @@ import { fmtWhen } from "@/lib/time";
 import { EquipmentIcon } from "@/components/EquipmentIcon";
 import { StatusBadge, STATUS_LABEL } from "@/components/StatusBadge";
 import { one } from "@/components/Notice";
+import { PageHead } from "@/components/PageHead";
 
 const KINDS: StatusKind[] = ["free", "booked", "in-use", "overdue", "out"];
+
+// Status edge on each tally tile: the word is always beside the colour.
+const TALLY: Record<StatusKind, string> = {
+  free: "border-free",
+  booked: "border-booked",
+  "in-use": "border-inuse",
+  overdue: "border-overdue",
+  out: "border-out",
+};
 
 function detail(s: Status<BookingLike & { user: { name: string }; useLocation: string | null }>, now: Date) {
   switch (s.kind) {
@@ -50,78 +60,79 @@ export default async function Board({ searchParams }: PageProps<"/">) {
     return q.size ? `/?${q}` : "/";
   };
 
-  const chip = (active: boolean) =>
-    `px-3 py-1.5 text-sm font-semibold border ${
-      active ? "bg-rgu-purple text-white border-rgu-purple" : "border-neutral-400 hover:border-rgu-purple"
-    }`;
-
   return (
     <>
-      <section className="bg-rgu-panel">
-        <div className="mx-auto max-w-6xl px-4 pt-10 pb-8">
-          <div className="angled bg-rgu-purple-dark text-white inline-block pr-20 pl-6 py-5">
-            <h1 className="text-3xl sm:text-4xl font-extrabold uppercase">Equipment</h1>
-            <p className="mt-1 text-lg">What&apos;s free in the lab right now</p>
-          </div>
-          <ul aria-label="Equipment by status" className="mt-6 flex flex-wrap gap-x-8 gap-y-2 text-lg">
-            {KINDS.map((k) => (
-              <li key={k}>
-                <Link href={href({ status: k })} className="flex gap-2 hover:underline underline-offset-4">
-                  <span className="font-semibold">{STATUS_LABEL[k]}</span>
-                  <span className="font-extrabold">{count(k)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
-
-      <div className="mx-auto max-w-6xl px-4 py-8">
-        <nav aria-label="Filter by status" className="flex flex-wrap gap-2">
-          <Link href={href({ status: undefined })} className={chip(!kind)} aria-current={!kind ? "page" : undefined}>
-            Any status
-          </Link>
+      <PageHead title="Equipment" sub="What's free in the lab right now">
+        <ul aria-label="Equipment by status" className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-5">
           {KINDS.map((k) => (
-            <Link key={k} href={href({ status: k })} className={chip(kind === k)} aria-current={kind === k ? "page" : undefined}>
-              {STATUS_LABEL[k]}
-            </Link>
+            <li key={k} className={k === "out" ? "col-span-2 sm:col-span-1" : undefined}>
+              <Link
+                href={href({ status: k })}
+                className={`group flex h-full min-h-11 items-center justify-between gap-3 border-t-4 bg-paper px-3 py-2 hover:shadow-lift sm:flex-col sm:items-start sm:justify-start sm:gap-0 ${TALLY[k]}`}
+              >
+                <span className="font-semibold group-hover:underline underline-offset-4">{STATUS_LABEL[k]}</span>
+                <span className="text-2xl font-extrabold tabular-nums leading-none sm:mt-1 sm:text-4xl">{count(k)}</span>
+              </Link>
+            </li>
           ))}
-        </nav>
-        <nav aria-label="Filter by type" className="mt-3 flex flex-wrap gap-2">
-          <Link href={href({ type: undefined })} className={chip(!type)} aria-current={!type ? "page" : undefined}>
-            All types
-          </Link>
-          {types.map((t) => (
-            <Link key={t} href={href({ type: t })} className={chip(type === t)} aria-current={type === t ? "page" : undefined}>
-              {t}
-            </Link>
-          ))}
-        </nav>
+        </ul>
+      </PageHead>
 
-        <ul className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mx-auto max-w-6xl px-4 pt-6">
+        <div className="grid gap-3 border-b border-rule pb-6">
+          <nav aria-label="Filter by status" className="flex flex-wrap gap-2">
+            <Link href={href({ status: undefined })} className="chip" aria-current={!kind ? "page" : undefined}>
+              Any status
+            </Link>
+            {KINDS.map((k) => (
+              <Link key={k} href={href({ status: k })} className="chip" aria-current={kind === k ? "page" : undefined}>
+                {STATUS_LABEL[k]}
+              </Link>
+            ))}
+          </nav>
+          <nav aria-label="Filter by type" className="flex flex-wrap gap-2">
+            <Link href={href({ type: undefined })} className="chip" aria-current={!type ? "page" : undefined}>
+              All types
+            </Link>
+            {types.map((t) => (
+              <Link key={t} href={href({ type: t })} className="chip" aria-current={type === t ? "page" : undefined}>
+                {t}
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        <ul className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {shown.map(({ e, s }) => (
             <li key={e.id}>
               <Link
                 href={`/equipment/${e.id}`}
-                className="group flex h-full gap-4 border border-neutral-300 p-4 hover:border-rgu-purple hover:shadow-[4px_4px_0_var(--color-rgu-purple)] transition-shadow"
+                className="group flex h-full flex-col border border-rule bg-paper hover:border-rgu-purple hover:shadow-lift"
               >
-                <EquipmentIcon type={e.type} className="size-14 shrink-0 text-rgu-purple" />
-                <div className="min-w-0">
-                  <h2 className="text-lg font-extrabold group-hover:underline">{e.name}</h2>
-                  <p className="text-sm text-neutral-700">
-                    {e.type} · {e.location}
-                    {e.assetId && <span className="font-mono"> · {e.assetId}</span>}
-                  </p>
-                  <div className="mt-2">
-                    <StatusBadge status={s} now={now} />
+                <div className="flex gap-4 p-4">
+                  <EquipmentIcon type={e.type} className="size-14 shrink-0 text-rgu-purple" />
+                  <div className="min-w-0">
+                    <h2 className="text-lg leading-tight font-extrabold group-hover:underline underline-offset-4">{e.name}</h2>
+                    <p className="mt-1 text-sm text-muted">{e.type}</p>
+                    <ul className="meta text-sm text-muted">
+                      <li>{e.location}</li>
+                      {e.assetId && <li className="font-mono">{e.assetId}</li>}
+                    </ul>
                   </div>
-                  <p className="mt-1 text-sm">{detail(s, now)}</p>
+                </div>
+                <div className="mt-auto border-t border-rule px-4 py-3">
+                  <StatusBadge status={s} now={now} />
+                  <p className="mt-1.5 text-sm">{detail(s, now)}</p>
                 </div>
               </Link>
             </li>
           ))}
         </ul>
-        {shown.length === 0 && <p className="mt-8">Nothing matches these filters.</p>}
+        {shown.length === 0 && (
+          <p className="mt-6 border-l-4 border-rule bg-paper-3 px-4 py-3">
+            Nothing matches these filters.
+          </p>
+        )}
       </div>
     </>
   );

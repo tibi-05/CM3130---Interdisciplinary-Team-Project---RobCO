@@ -1,0 +1,95 @@
+/* RGU Robotics Lab tokens. Brand colours come from rgu.ac.uk; Outfit stands in for Zona Pro (licensed).
+   Every colour and face in the app goes through this block. */
+@theme static {
+  --font-sans: var(--font-outfit), Helvetica, Arial, sans-serif;
+  --font-display: var(--font-outfit), Helvetica, Arial, sans-serif;
+  --font-body: var(--font-outfit), Helvetica, Arial, sans-serif;
+  --font-outlier: var(--font-body);
+
+  /* App type scale, 1.2 ratio from a 16px body */
+  --text-lg: 1.2rem;
+  --text-xl: 1.44rem;
+  --text-2xl: 1.728rem;
+  --text-3xl: 2.074rem;
+  --text-display-s: 1.728rem;
+  --text-display: 2.074rem;
+  --text-section: 1.44rem;
+  --text-title: 1.2rem;
+  --text-lead: 1.125rem;
+
+  /* RGU brand */
+  --color-rgu-purple: #712177;
+  --color-rgu-purple-dark: #571046;
+  --color-rgu-purple-deep: #5e1e67;
+  --color-rgu-blue: #007abf;
+  --color-rgu-blue-dark: #006b99;
+  --color-rgu-blue-light: #bae0f5;
+  --color-rgu-panel: #d0eaf8;
+
+  /* Roles. Black on white is the RGU body; purple tints and greys carry surfaces. */
+  --color-paper: #ffffff;
+  --color-paper-2: #f8f3f8; /* purple at 5% on white */
+  --color-paper-3: #efefef; /* neutral well */
+  --color-ink: #000000;
+  --color-ink-2: #262626;
+  --color-muted: #4d4d4d; /* 8.4:1 on white, 6.8:1 on panel blue */
+  --color-rule: #d4d4d4; /* hairlines, decorative only */
+  --color-edge: #6b6b6b; /* field and card edges that must read: 5.3:1 */
+  --color-on-brand: #ffffff;
+  --color-accent: var(--color-rgu-blue);
+  --color-accent-ink: #ffffff;
+  --color-focus: var(--color-rgu-blue);
+  --color-error: var(--color-overdue);
+  --color-success: var(--color-free);
+
+  /* Status colours stay away from brand purple so it never reads as a state. They mean status only. */
+  --color-free: #1b6e35;
+  --color-free-bg: #dff2e5;
+  --color-inuse: #7a4a00;
+  --color-inuse-bg: #ffefcc;
+  --color-booked: #005f9d;
+  --color-booked-bg: #d0eaf8;
+  --color-overdue: #a51d1d;
+  --color-overdue-bg: #fde2e0;
+  --color-overdue-dark: #831515;
+  --color-out: #444444;
+  --color-out-bg: #e8e8e8;
+  --color-disabled: #c9c9c9;
+  --color-disabled-ink: #3d3d3d;
+
+  --radius-card: 0;
+  --radius-pill: 0;
+  --shadow-card: none;
+  --shadow-lift: 4px 4px 0 var(--color-rgu-purple);
+  --tracking-display: 0em;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+:root {
+  --space-3xs: 2px;
+  --space-2xs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 40px;
+  --space-2xl: 64px;
+  --space-3xl: 96px;
+  --space-4xl: 144px;
+  --dur-micro: 120ms;
+  --dur-short: 220ms;
+  --dur-long: 420ms;
+  --display-weight: 800;
+  --z-base: 1;
+  --z-raised: 10;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-sticky-nav: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+  --z-tooltip: 600;
+  --rule-hair: 1px;
+  --hit: 2.75rem; /* 44px touch target */
+}
