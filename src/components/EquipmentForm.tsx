@@ -49,7 +49,7 @@ export function EquipmentForm({
       <TextField label="Model" name="model" defaultValue={v("model")} />
       <TextField label="Serial number" name="serialNumber" defaultValue={v("serialNumber")} />
       <TextField label="Condition" name="condition" placeholder="e.g. Good" defaultValue={v("condition")} />
-      <TextField label="Manual link" name="manualUrl" type="url" placeholder="https://…" defaultValue={v("manualUrl")} />
+      <TextField label="Manual link" name="manualUrl" inputMode="url" placeholder="https://… or /manuals/go2.pdf" defaultValue={v("manualUrl")} />
       <TextField label="Photo link" name="photoUrl" placeholder="https://… or /photos/go2.jpg" defaultValue={v("photoUrl")} />
       <TextArea
         className="sm:col-span-2"

@@ -84,8 +84,9 @@ export function twinBalance<E extends { id: number; name: string; assetId: strin
 
 export const hours = (minutes: number) => Math.round((minutes / 60) * 10) / 10;
 
-/** One CSV cell, quoted when needed. */
+/** One CSV cell, quoted when needed. Text starting with = + - @ is prefixed so spreadsheets don't run it as a formula. */
 export const csv = (v: unknown) => {
-  const s = v instanceof Date ? londonDate(v) : v == null ? "" : String(v);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  let s = v instanceof Date ? londonDate(v) : v == null ? "" : String(v);
+  if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 };

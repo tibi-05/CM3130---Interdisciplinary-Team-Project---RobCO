@@ -60,7 +60,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                       </Link>
                     </h2>
                     <p>
-                      <span className="font-semibold">{fmtWhen(b.start, now)}</span> to <span className="font-semibold">{fmtWhen(b.end, now)}</span>
+                      <span className="font-semibold">{fmtWhen(b.start, now)}</span> to <span className="font-semibold">{fmtWhen(b.end, b.start)}</span>
                     </p>
                     <p>
                       {b.user.name}

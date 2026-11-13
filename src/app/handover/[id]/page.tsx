@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { currentUser, requestNow } from "@/lib/session";
 import { can } from "@/lib/permissions";
@@ -19,7 +19,8 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
   const user = await currentUser();
   if (!/^\d+$/.test(id)) notFound();
   const b = await prisma.booking.findUnique({ where: { id: Number(id) }, include: { equipment: true, user: true } });
-  if (!b || b.cancelledAt || !can.actOnBooking(user, b)) notFound();
+  if (!b || b.cancelledAt) notFound();
+  if (!can.actOnBooking(user, b)) redirect("/bookings"); // e.g. after switching from Staff to Student
 
   const returning = !!b.checkedOutAt && !b.checkedInAt;
   const done = !!b.checkedInAt;
@@ -52,7 +53,7 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
           <input type="hidden" name="returnTo" value={`/handover/${b.id}`} />
           {late && (
             <p className="mb-4 border-l-4 border-overdue bg-overdue-bg p-3 font-semibold text-overdue">
-              This is {fmtWhen(b.end, now)} past due. It will be recorded as a late return.
+              It was due back {fmtWhen(b.end, now)}. It will be recorded as a late return.
             </p>
           )}
           {returning && needsCharge(b.batteryOut) && (

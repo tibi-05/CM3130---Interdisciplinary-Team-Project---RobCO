@@ -69,9 +69,11 @@ describe("status", () => {
     expect(statusOf(ok, [b], at("12:45")).kind).toBe("free");
   });
 
-  it("out of service wins over everything", () => {
+  it("out of service wins over reservations, but not over a loan that's still out", () => {
     const s = statusOf({ outOfService: true, outOfServiceReason: "Servo" }, [booking("12:00", "13:00")], at("12:10"));
     expect(s).toEqual({ kind: "out", reason: "Servo" });
+    const loan = statusOf({ outOfService: true, outOfServiceReason: "Servo" }, [booking("12:00", "13:00", { checkedOutAt: at("12:00") })], at("13:10"));
+    expect(loan.kind).toBe("overdue");
   });
 });
 
@@ -94,8 +96,8 @@ describe("bugs found in QA", () => {
 
   it("can't check out while someone else still has the item", () => {
     const holder = { ...booking("10:00", "11:00", { checkedOutAt: at("10:00") }), user: { name: "Priya" } };
-    expect(checkOutBlocker([holder])).toMatch(/Priya/);
-    expect(checkOutBlocker([{ ...holder, checkedInAt: at("11:00") }])).toBeNull();
+    expect(checkOutBlocker([holder], at("10:30"))).toMatch(/Priya/);
+    expect(checkOutBlocker([{ ...holder, checkedInAt: at("11:00") }], at("11:05"))).toBeNull();
   });
 
   it("rejects bookings too far ahead", () => {
@@ -218,5 +220,30 @@ describe("hand-over", () => {
   it("warns about low and flat batteries only", async () => {
     const { needsCharge } = await import("./handover");
     expect(["Full", "Half", "Low", "Flat", "No battery"].map(needsCharge)).toEqual([false, false, true, true, false]);
+  });
+});
+
+describe("engineering review fixes", () => {
+  it("collecting early never cuts into a booking that is still running", () => {
+    const running = { ...booking("09:00", "10:00"), user: { name: "Priya" } };
+    expect(checkOutBlocker([running], at("09:50"))).toMatch(/Priya's booking runs until 10:00/);
+    expect(checkOutBlocker([running], at("10:00"))).toBeNull();
+    expect(checkOutBlocker([{ ...running, approval: "REJECTED" }], at("09:50"))).toBeNull();
+  });
+
+  it("extended requests: no start at closing time, no end beyond the horizon, not for standard-length bookings", () => {
+    const now = at("08:00");
+    expect(validateRange(at("17:00"), at("10:00", "2026-10-16"), now, { extended: true })).toMatch(/lab hours/);
+    expect(validateRange(at("09:00"), at("10:00", "2030-01-07"), now, { extended: true })).toMatch(/within 8 weeks/);
+    expect(validateRange(at("10:00"), at("11:00"), now, { extended: true })).toMatch(/standard booking/);
+  });
+
+  it("CSV cells can't smuggle spreadsheet formulas", async () => {
+    const { csv } = await import("./usage");
+    expect(csv('=HYPERLINK("http://x","y")')).toBe(`"'=HYPERLINK(""http://x"",""y"")"`);
+    expect(csv("+cmd")).toBe("'+cmd");
+    expect(csv("@SUM(1)")).toBe("'@SUM(1)");
+    expect(csv("a\rb")).toBe('"a\rb"');
+    expect(csv(-3)).toBe("-3"); // numbers are data, not formulas
   });
 });

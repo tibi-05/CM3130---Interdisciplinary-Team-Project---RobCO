@@ -1,5 +1,5 @@
 import { LAB } from "./config";
-import { londonDate, londonParts, minutesOfDay } from "./time";
+import { fmtTime, londonDate, londonParts, minutesOfDay } from "./time";
 
 export type BookingLike = {
   start: Date;
@@ -15,7 +15,7 @@ export type Status<B extends BookingLike = BookingLike> =
   | { kind: "overdue"; since: Date; booking: B }
   | { kind: "in-use"; until: Date; booking: B }
   | { kind: "booked"; until: Date; booking: B }
-  | { kind: "free"; nextStart: Date | null };
+  | { kind: "free"; nextStart: Date | null; next: B | null };
 
 export type StatusKind = Status["kind"];
 
@@ -44,24 +44,31 @@ export function statusOf<B extends BookingLike>(
   bookings: B[],
   now: Date,
 ): Status<B> {
-  if (equipment.outOfService) return { kind: "out", reason: equipment.outOfServiceReason };
-
   const live = bookings.filter((b) => holdsSlot(b) && !b.checkedInAt);
 
+  // A loan that's still out comes first: going out of service mustn't hide who has the item.
   const out = live.find((b) => b.checkedOutAt);
   if (out) return now >= out.end ? { kind: "overdue", since: out.end, booking: out } : { kind: "in-use", until: out.end, booking: out };
+
+  if (equipment.outOfService) return { kind: "out", reason: equipment.outOfServiceReason };
 
   const reserved = live.find((b) => b.start <= now && now < b.end);
   if (reserved) return { kind: "booked", until: reserved.end, booking: reserved };
 
-  const next = live.filter((b) => b.start > now).sort((a, b) => +a.start - +b.start)[0];
-  return { kind: "free", nextStart: next?.start ?? null };
+  const next = live.filter((b) => b.start > now).sort((a, b) => +a.start - +b.start)[0] ?? null;
+  return { kind: "free", nextStart: next?.start ?? null, next };
 }
 
-/** Why a booking can't be collected yet (someone else still has the item), or null. `others` = the item's other bookings. */
-export function checkOutBlocker(others: (BookingLike & { user: { name: string } })[]): string | null {
+/**
+ * Why the item can't be taken right now, or null. `others` = the item's other bookings.
+ * Blocks while someone else has it checked out (overdue included) and while someone else's booking
+ * is still running, so collecting a few minutes early never cuts into the previous person's time.
+ */
+export function checkOutBlocker(others: (BookingLike & { user: { name: string } })[], now: Date): string | null {
   const holder = others.find((b) => b.checkedOutAt && !b.checkedInAt && !b.cancelledAt);
   if (holder) return `${holder.user.name} still has it. It has to be checked in first.`;
+  const running = others.find((b) => holdsSlot(b) && !b.checkedOutAt && b.start <= now && now < b.end);
+  if (running) return `${running.user.name}'s booking runs until ${fmtTime(running.end)}. You can collect it after that.`;
   return null;
 }
 
@@ -88,8 +95,12 @@ export function validateRange(
   const s = minutesOfDay(start);
   const e = minutesOfDay(end);
   if (opts.extended) {
+    if (end.getTime() > now.getTime() + LAB.maxWeeksAhead * 7 * 86_400_000)
+      return `Return has to be within ${LAB.maxWeeksAhead} weeks; ask again nearer the time for longer.`;
+    if (end.getTime() - start.getTime() <= LAB.maxBookingMinutes * 60_000 && londonDate(start) === londonDate(end))
+      return `That fits in a standard booking (up to ${LAB.maxBookingMinutes / 60} hours); use the booking form on the item's page.`;
     if (!isLabDay(start) || !isLabDay(end)) return "Collection and return must both be on a weekday (Monday to Friday).";
-    if (!inHours(s) || !inHours(e)) return "Collection and return must both be within lab hours (09:00–17:00).";
+    if (s < LAB.openMinutes || s >= LAB.closeMinutes || !inHours(e)) return "Collection and return must both be within lab hours (09:00–17:00).";
     if (s % LAB.slotMinutes || e % LAB.slotMinutes) return `Times must be on ${LAB.slotMinutes}-minute steps.`;
     return null;
   }

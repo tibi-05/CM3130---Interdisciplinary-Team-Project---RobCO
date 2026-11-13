@@ -19,9 +19,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <main className="flex-1">{children}</main>
         <footer className="bg-rgu-purple text-white text-sm">
           <div className="mx-auto max-w-6xl px-4 py-6 flex flex-wrap justify-between gap-2">
-            <span className="font-semibold">
-              {LAB.name} · {LAB.location}
-            </span>
+            <span className="font-semibold">{LAB.name}</span>
             <span>Prototype · demo data · times in UK time</span>
           </div>
         </footer>

@@ -1,7 +1,7 @@
 // Lab rules in one place. Lab hours are a placeholder until James confirms them.
 export const LAB = {
   name: "RGU Robotics Lab",
-  location: "Lab 4-2-4",
+  location: "Robotics Lab", // room 4-2-4, to be confirmed with James
   timeZone: "Europe/London",
   openMinutes: 9 * 60,
   closeMinutes: 17 * 60,

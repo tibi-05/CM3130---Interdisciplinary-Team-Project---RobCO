@@ -4,22 +4,13 @@ import { prisma } from "@/lib/db";
 import { can } from "@/lib/permissions";
 import { syncNotifications } from "@/lib/notify";
 import { currentUser, requestNow, ROLES } from "@/lib/session";
+import { LiveCount } from "./LiveCount";
 
 const LABEL = { STUDENT: "Student", STAFF: "Staff", ADMIN: "Admin" } as const;
 
-function Count({ n, label }: { n: number; label: string }) {
-  if (!n) return null;
-  return (
-    <span className="ml-1.5 inline-block min-w-5 bg-white px-1.5 text-center text-xs font-extrabold leading-5 text-rgu-purple">
-      {n}
-      <span className="sr-only"> {label}</span>
-    </span>
-  );
-}
-
 export async function Header() {
   const user = await currentUser();
-  await syncNotifications(await requestNow()); // reminders are time-based; no background job in the prototype
+  await syncNotifications(await requestNow()); // reminders are time-based; LiveCount repeats this on client navigation
   const [unread, pending] = await Promise.all([
     prisma.notification.count({ where: { userId: user.id, readAt: null } }),
     can.approveBookings(user) ? prisma.booking.count({ where: { approval: "PENDING", cancelledAt: null } }) : 0,
@@ -28,8 +19,8 @@ export async function Header() {
   const nav = [
     { href: "/", label: "Equipment" },
     { href: "/bookings", label: "My bookings" },
-    { href: "/inbox", label: "Inbox", count: unread, countLabel: "unread" },
-    ...(can.approveBookings(user) ? [{ href: "/requests", label: "Requests", count: pending, countLabel: "waiting" }] : []),
+    { href: "/inbox", label: "Inbox", which: "unread" as const, count: unread, countLabel: "unread" },
+    ...(can.approveBookings(user) ? [{ href: "/requests", label: "Requests", which: "pending" as const, count: pending, countLabel: "waiting" }] : []),
     ...(can.viewReports(user) ? [{ href: "/reports", label: "Reports" }] : []),
     ...(can.manageEquipment(user) ? [{ href: "/admin", label: "Admin" }] : []),
   ];
@@ -45,7 +36,7 @@ export async function Header() {
           {nav.map((n) => (
             <Link key={n.href} href={n.href} className="hover:underline underline-offset-4">
               {n.label}
-              {"count" in n && <Count n={n.count ?? 0} label={n.countLabel ?? ""} />}
+              {"which" in n && n.which && <LiveCount key={n.count} which={n.which} initial={n.count ?? 0} label={n.countLabel ?? ""} />}
             </Link>
           ))}
         </nav>

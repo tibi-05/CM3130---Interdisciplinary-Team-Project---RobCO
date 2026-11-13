@@ -12,7 +12,8 @@ const KINDS: StatusKind[] = ["free", "booked", "in-use", "overdue", "out"];
 function detail(s: Status<BookingLike & { user: { name: string }; useLocation: string | null }>, now: Date) {
   switch (s.kind) {
     case "free":
-      return s.nextStart ? `Next booking ${fmtWhen(s.nextStart, now)}` : "No upcoming bookings";
+      if (!s.next) return "No upcoming bookings";
+      return `Next booking ${fmtWhen(s.next.start, now)}${s.next.approval === "PENDING" ? " (awaiting approval)" : ""}`;
     case "booked":
       return s.booking.approval === "PENDING"
         ? `Requested by ${s.booking.user.name}, awaiting approval`

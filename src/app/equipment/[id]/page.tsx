@@ -30,7 +30,7 @@ const PENDING_STRIPES = { backgroundImage: "repeating-linear-gradient(135deg, va
 export default async function EquipmentPage({ params, searchParams }: PageProps<"/equipment/[id]">) {
   const { id } = await params;
   const sp = await searchParams;
-  const week = Math.max(-4, Math.min(LAB.maxWeeksAhead, Number(one(sp.week)) || 0));
+  const week = Math.max(-4, Math.min(LAB.maxWeeksAhead, Math.trunc(Number(one(sp.week))) || 0));
   const now = await requestNow();
   const user = await currentUser();
 
@@ -105,11 +105,11 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
             </p>
           )}
           {e.notes && <p className="mt-2 text-sm text-neutral-700 italic">{e.notes}</p>}
-          {status.kind !== "free" && status.kind !== "out" && (
+          {status.kind !== "free" && status.kind !== "out" && holder?.userId !== user.id && (
             <form action={toggleWatch} className="mt-3">
               <input type="hidden" name="equipmentId" value={e.id} />
               <input type="hidden" name="returnTo" value={returnTo} />
-              <button className="btn btn-light" aria-pressed={watching}>
+              <button className="btn btn-light">
                 {watching ? "Stop notifying me" : "Notify me when it's free"}
               </button>
             </form>
@@ -150,7 +150,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                 is charged before your session.
               </li>
             )}
-            {lastReturn && lastReturn.conditionIn && lastReturn.conditionIn !== "Good" && (
+            {lastReturn && lastReturn.conditionIn && lastReturn.conditionIn !== "Good" && !openFaults.some((f) => f.bookingId === lastReturn.id) && (
               <li>Last returned as: {lastReturn.conditionIn.toLowerCase()}.</li>
             )}
             {openFaults.map((f) => (
@@ -221,6 +221,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                   <TextField label="What is it for?" name="purpose" required maxLength={120} />
                   <SelectField label="Condition now" name="conditionOut" options={CONDITIONS.slice(0, 2)} />
                   <SelectField label="Battery now" name="batteryOut" options={BATTERY} />
+                  <TextField className="sm:col-span-2" label="Anything not right? (optional)" name="note" maxLength={300} />
                 </div>
                 <button className="btn mt-4">Check out now</button>
               </>
@@ -259,7 +260,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
           <Legend className="bg-inuse-bg border-inuse" label="Checked out" />
           <Legend className="bg-overdue-bg border-overdue" label="Overdue" />
         </div>
-        <div className="mt-3 overflow-x-auto">
+        <div className="relative mt-3 overflow-x-auto">
           <table className="w-full min-w-[640px] border-collapse text-sm table-fixed">
             <thead>
               <tr>
@@ -299,7 +300,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                         key={d}
                         className={`h-7 border-l-4 border-b border-b-white px-1 ${tone} ${past ? "opacity-50" : ""}`}
                         style={pending ? PENDING_STRIPES : undefined}
-                        title={b ? `${b.user.name}, ${fmtWhen(b.start, now)}–${fmtWhen(b.end, now)}${pending ? " (awaiting approval)" : ""}` : `${t} free`}
+                        title={b ? `${b.user.name}, ${fmtWhen(b.start, now)}–${fmtWhen(b.end, b.start)}${pending ? " (awaiting approval)" : ""}` : `${t} free`}
                       >
                         {b && first && (
                           <span className="font-semibold truncate block" aria-hidden="true">
@@ -341,7 +342,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                   {b.checkedOutAt && now <= b.end && <span className="text-inuse font-semibold"> · checked out</span>}
                   {e.outOfService && !b.checkedOutAt && <span className="text-overdue font-semibold"> · affected: item out of service</span>}
                 </span>
-                <BookingActions booking={b} user={user} now={now} returnTo={returnTo} />
+                <BookingActions booking={b} user={user} now={now} returnTo={returnTo} itemOutOfService={e.outOfService} />
               </li>
             ))}
           </ul>
@@ -375,7 +376,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
                       <input type="hidden" name="faultId" value={f.id} />
                       <input type="hidden" name="returnTo" value={returnTo} />
                       <TextField label="What was done" name="resolution" maxLength={300} className="min-w-48 flex-1 text-sm" />
-                      {e.outOfService && (
+                      {e.outOfService && f.severity === "UNUSABLE" && (e.outOfServiceReason ?? "").startsWith("Fault reported: ") && (
                         <label className="flex items-center gap-2 text-sm font-semibold">
                           <input type="checkbox" name="backInService" value="1" defaultChecked /> Back in service
                         </label>

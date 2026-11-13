@@ -17,7 +17,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
   const now = await requestNow();
   const [equipment, openFaults] = await Promise.all([
     prisma.equipment.findMany({
-      include: { _count: { select: { bookings: { where: { cancelledAt: null, checkedOutAt: null, end: { gt: now } } } } } },
+      include: { _count: { select: { bookings: { where: { cancelledAt: null, checkedOutAt: null, end: { gt: now }, approval: { not: "REJECTED" } } } } } },
     }),
     prisma.fault.findMany({ where: { resolvedAt: null }, include: { equipment: true, reporter: true }, orderBy: { createdAt: "desc" } }),
   ]);
@@ -53,7 +53,7 @@ export default async function AdminPage({ searchParams }: PageProps<"/admin">) {
                   <input type="hidden" name="faultId" value={f.id} />
                   <input type="hidden" name="returnTo" value="/admin#faults" />
                   <TextField label="What was done" name="resolution" maxLength={300} className="min-w-64 flex-1" />
-                  {f.equipment.outOfService && (
+                  {f.equipment.outOfService && f.severity === "UNUSABLE" && (f.equipment.outOfServiceReason ?? "").startsWith("Fault reported: ") && (
                     <label className="flex items-center gap-2 font-semibold">
                       <input type="checkbox" name="backInService" value="1" defaultChecked /> Back in service
                     </label>

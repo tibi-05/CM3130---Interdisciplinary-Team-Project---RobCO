@@ -9,11 +9,12 @@ export async function GET() {
   if (!can.viewReports(user)) return new Response("Staff only", { status: 403 });
   const now = await requestNow();
   const [equipment, bookings, faults] = await Promise.all([
-    prisma.equipment.findMany({ orderBy: { assetId: "asc" } }),
+    prisma.equipment.findMany(),
     prisma.booking.findMany({ where: { cancelledAt: null } }),
     prisma.fault.findMany(),
   ]);
   const usage = usageByItem(bookings, now);
+  equipment.sort((a, b) => (a.assetId ?? "\uffff").localeCompare(b.assetId ?? "\uffff") || a.name.localeCompare(b.name));
   const header = ["Asset ID", "Item", "Type", "Manufacturer", "Model", "Serial number", "Uses", "Hours in use", "Late returns", "Missed bookings", "Faults", "Open faults", "Last used", "Condition", "Out of service"];
   const lines = equipment.map((e) => {
     const u = usage.get(e.id);

@@ -3,6 +3,7 @@
 import { prisma } from "./db";
 import { LAB } from "./config";
 import { fmtWhen } from "./time";
+import { statusOf } from "./booking";
 
 type Note = { userId: number; kind: string; subject: string; body: string; link?: string; key: string };
 
@@ -45,7 +46,7 @@ export async function notifyWatchers(equipmentId: number) {
       subject: `${item.name} is available again`,
       body: `You asked to be told when ${item.name} became free. It can be booked now.`,
       link: `/equipment/${item.id}`,
-      key: `available:${w.id}:${Date.now()}`,
+      key: `available:${w.id}`,
     });
   }
   await prisma.watch.deleteMany({ where: { equipmentId } });
@@ -56,6 +57,28 @@ export async function notifyWatchers(equipmentId: number) {
  * the unique keys make it safe to run as often as needed.
  */
 export async function syncNotifications(now: Date) {
+  // Requests nobody reviewed before their time ran out: close them and tell the student.
+  const expired = await prisma.booking.findMany({ where: { approval: "PENDING", cancelledAt: null, end: { lte: now } }, include: { equipment: true } });
+  for (const b of expired) {
+    const { count } = await prisma.booking.updateMany({
+      where: { id: b.id, approval: "PENDING" },
+      data: { approval: "REJECTED", reviewedAt: now, reviewNote: "Not reviewed before the booking time passed." },
+    });
+    if (count)
+      await notify({
+        userId: b.userId,
+        kind: "REJECTED",
+        subject: `Request expired: ${b.equipment.name}`,
+        body: `Your request for ${b.equipment.name} wasn't reviewed in time, so it has been closed. Please book again or contact lab staff.`,
+        link: `/equipment/${b.equipmentId}`,
+        key: `review:${b.id}`,
+      });
+  }
+
+  // "Notify me when it's free" also has to fire when a booking simply ends, not only after an action.
+  const watched = await prisma.equipment.findMany({ where: { watches: { some: {} }, outOfService: false }, include: { bookings: { where: { cancelledAt: null } } } });
+  for (const item of watched) if (statusOf(item, item.bookings, now).kind === "free") await notifyWatchers(item.id);
+
   const soon = new Date(now.getTime() + LAB.reminderHoursBefore * 3_600_000);
   const bookings = await prisma.booking.findMany({
     where: {
@@ -80,7 +103,7 @@ export async function syncNotifications(now: Date) {
           userId: id,
           kind: "APPROVAL_NEEDED",
           subject: `Request to approve: ${b.equipment.name}`,
-          body: `${b.user.name} asked for ${b.equipment.name}, ${fmtWhen(b.start, now)} to ${fmtWhen(b.end, now)}.`,
+          body: `${b.user.name} asked for ${b.equipment.name}, ${fmtWhen(b.start, now)} to ${fmtWhen(b.end, b.start)}.`,
           link: "/requests",
           key: `pending:${b.id}:${id}`,
         });

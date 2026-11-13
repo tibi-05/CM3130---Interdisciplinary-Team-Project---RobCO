@@ -13,7 +13,7 @@ import { safePath } from "@/lib/paths";
 import { isBattery, isCondition, needsCharge } from "@/lib/handover";
 import { notify, notifyAdmins, notifyWatchers } from "@/lib/notify";
 
-const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
+const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim().slice(0, 2000); // server-side cap; forms also set maxLength
 const opt = (f: FormData, k: string) => str(f, k) || null;
 
 /** A record id from the form; anything that isn't a whole number goes back as an error. */
@@ -31,7 +31,7 @@ function done(f: FormData, key: "ok" | "error", message: string, set: Record<str
   for (const [k, v] of Object.entries(set)) to.searchParams.set(k, v);
   to.searchParams.set(key, message);
   revalidatePath("/", "layout");
-  redirect(to.pathname + to.search);
+  redirect(to.pathname + to.search + to.hash);
 }
 
 export async function setRole(f: FormData) {
@@ -57,6 +57,41 @@ async function afterFreed(equipmentId: number) {
   if (item && statusOf(item, item.bookings, new Date()).kind === "free") await notifyWatchers(equipmentId);
 }
 
+const FAULT_REASON = "Fault reported: ";
+
+/** Once a request is decided or withdrawn, the staff "please approve" alerts for it are done. */
+const closeApprovalAlerts = (bookingId: number) =>
+  prisma.notification.updateMany({ where: { key: { startsWith: `pending:${bookingId}:` }, readAt: null }, data: { readAt: new Date() } });
+
+async function findItem(f: FormData, equipmentId: number) {
+  const item = await prisma.equipment.findUnique({ where: { id: equipmentId } });
+  if (!item) done(f, "error", "That equipment no longer exists.");
+  return item;
+}
+
+/**
+ * When an item goes out of service, bookings that can no longer go ahead are cancelled and their
+ * owners told, so they aren't later recorded as missed bookings. Returns how many were cancelled.
+ */
+async function cancelAffected(equipmentId: number, itemName: string, why: string, exceptBookingId?: number) {
+  const now = new Date();
+  const affected = await prisma.booking.findMany({
+    where: { equipmentId, cancelledAt: null, checkedOutAt: null, end: { gt: now }, approval: { not: "REJECTED" }, id: { not: exceptBookingId ?? -1 } },
+  });
+  for (const b of affected) {
+    await prisma.booking.update({ where: { id: b.id }, data: { cancelledAt: now } });
+    await notify({
+      userId: b.userId,
+      kind: "CANCELLED",
+      subject: `Cancelled: ${itemName}, ${fmtDay(b.start)}`,
+      body: `Your booking of ${itemName} (${fmtWhen(b.start, now)}) can't go ahead: ${why}. Please book another item or another time.`,
+      link: "/",
+      key: `outage-cancel:${b.id}`,
+    });
+  }
+  return affected.length;
+}
+
 // ---------- Booking ----------
 
 type NewBooking = { start: Date; end: Date; walkUp?: boolean; extended?: boolean };
@@ -70,6 +105,7 @@ async function createBooking(f: FormData, b: NewBooking) {
   const useLocation = opt(f, "useLocation");
   const justification = opt(f, "justification");
 
+  if (!purpose) done(f, "error", "Please say what you need it for.");
   const invalid = validateRange(b.start, b.end, now, { walkUp: b.walkUp, extended: b.extended });
   if (invalid) done(f, "error", invalid);
   if (b.extended && !justification) done(f, "error", "Please explain why you need it for this long.");
@@ -84,8 +120,15 @@ async function createBooking(f: FormData, b: NewBooking) {
     if (!equipment) return "That equipment no longer exists.";
     if (equipment.outOfService) return `${equipment.name} is out of service.`;
     const existing = await tx.booking.findMany({ where: { equipmentId, cancelledAt: null }, include: { user: true } });
+    if (b.walkUp) {
+      const blocked = checkOutBlocker(existing, now);
+      if (blocked) return blocked;
+    }
     const clash = findClash(b.start, b.end, existing, now);
-    if (clash) return `Clashes with ${clash.user.name}'s booking, ${fmtWhen(clash.start, now)}–${fmtWhen(clash.end, now)}.`;
+    if (clash)
+      return clash.userId === user.id
+        ? `You already have it booked ${fmtWhen(clash.start, now)}–${fmtWhen(clash.end, clash.start)}.`
+        : `Clashes with ${clash.user.name}'s booking, ${fmtWhen(clash.start, now)}–${fmtWhen(clash.end, clash.start)}.`;
     await tx.booking.create({
       data: {
         equipmentId,
@@ -117,7 +160,7 @@ export async function book(f: FormData) {
   const week = String(weekOffset(new Date(), start));
   const when = `${fmtDay(start)}, ${fmtTime(start)}–${fmtTime(end)}`;
   if (approval === "PENDING")
-    done(f, "ok", `Request sent for ${when}. Staff will review it (${reasons.join("; ").toLowerCase()}).`, { week });
+    done(f, "ok", `Request sent for ${when}. Staff will review it. Reason: ${reasons.join("; ")}.`, { week });
   done(f, "ok", `Booked ${when}.`, { week });
 }
 
@@ -138,6 +181,10 @@ export async function walkUp(f: FormData) {
   if (!isBattery(str(f, "batteryOut")) || (condition !== "Good" && condition !== "Minor issue"))
     done(f, "error", "Please record the condition and battery level. If it's damaged, report a fault instead.");
   await createBooking(f, { start: now, end, walkUp: true });
+  if (condition === "Minor issue") {
+    const user = await currentUser();
+    await reportFaultFor(user.id, id(f, "equipmentId"), opt(f, "note") ?? "Minor issue noticed at walk-up collection.", "MINOR");
+  }
   done(f, "ok", `Checked out. Please return it by ${fmtTime(end)}.`);
 }
 
@@ -152,7 +199,9 @@ async function ownBooking(f: FormData) {
 export async function cancel(f: FormData) {
   const { booking: b } = await ownBooking(f);
   if (b.checkedOutAt) done(f, "error", "This item is already checked out. Check it in instead.");
+  if (new Date() >= b.end) done(f, "error", "This booking has already ended, so it stays on the record.");
   await prisma.booking.update({ where: { id: b.id }, data: { cancelledAt: new Date() } });
+  if (b.approval === "PENDING") await closeApprovalAlerts(b.id);
   await afterFreed(b.equipmentId);
   done(f, "ok", "Booking cancelled.");
 }
@@ -162,12 +211,16 @@ export async function review(f: FormData) {
   if (!can.approveBookings(user)) done(f, "error", "Only lab staff can approve requests.");
   const b = await prisma.booking.findUnique({ where: { id: id(f, "bookingId") }, include: { equipment: true } });
   if (!b || b.cancelledAt || b.approval !== "PENDING") done(f, "error", "That request has already been dealt with.");
+  if (b.userId === user.id) done(f, "error", "Someone else on the staff has to review your own request.");
+  if (new Date() >= b.end) done(f, "error", "This request's time has already passed.");
   const approve = str(f, "decision") === "approve";
   const note = opt(f, "note");
-  await prisma.booking.update({
-    where: { id: b.id },
+  const { count } = await prisma.booking.updateMany({
+    where: { id: b.id, approval: "PENDING", cancelledAt: null },
     data: { approval: approve ? "APPROVED" : "REJECTED", reviewedById: user.id, reviewedAt: new Date(), reviewNote: note },
   });
+  if (!count) done(f, "error", "That request has already been dealt with.");
+  await closeApprovalAlerts(b.id);
   await notify({
     userId: b.userId,
     kind: approve ? "APPROVED" : "REJECTED",
@@ -195,6 +248,11 @@ export async function checkOut(f: FormData) {
     done(f, "error", `You can collect it from ${LAB.checkOutEarlyMinutes} minutes before the booking starts.`);
   if (now >= b.end) done(f, "error", "This booking has already ended.");
 
+  // Someone else still has it, or their booking is still running: say so before anything else.
+  const others = await prisma.booking.findMany({ where: { equipmentId: b.equipmentId, id: { not: b.id } }, include: { user: true } });
+  const busy = checkOutBlocker(others, now);
+  if (busy) done(f, "error", busy);
+
   // Found broken at collection: record the fault instead of handing it over.
   if (condition === "Damaged or not working") {
     await reportFaultFor(user.id, b.equipmentId, opt(f, "note") ?? "Found damaged or not working at collection.", "UNUSABLE", b.id);
@@ -204,13 +262,13 @@ export async function checkOut(f: FormData) {
 
   const blocked = await prisma.$transaction(async (tx) => {
     const others = await tx.booking.findMany({ where: { equipmentId: b.equipmentId, id: { not: b.id } }, include: { user: true } });
-    const reason = checkOutBlocker(others);
-    if (!reason)
-      await tx.booking.update({
-        where: { id: b.id },
-        data: { checkedOutAt: now, conditionOut: condition, batteryOut: battery, returnNote: opt(f, "note") },
-      });
-    return reason;
+    const reason = checkOutBlocker(others, now);
+    if (reason) return reason;
+    const { count } = await tx.booking.updateMany({
+      where: { id: b.id, checkedOutAt: null, cancelledAt: null },
+      data: { checkedOutAt: now, conditionOut: condition, batteryOut: battery, returnNote: opt(f, "note") },
+    });
+    return count ? null : "Already checked out.";
   });
   if (blocked) done(f, "error", blocked);
   if (condition === "Minor issue") await reportFaultFor(user.id, b.equipmentId, opt(f, "note") ?? "Minor issue noticed at collection.", "MINOR", b.id);
@@ -227,11 +285,13 @@ export async function checkIn(f: FormData) {
   if (!isCondition(condition) || !isBattery(battery)) done(f, "error", "Please record the condition and battery level.");
   if (!b.checkedOutAt || b.checkedInAt) done(f, "error", "This item isn't checked out.");
 
-  await prisma.booking.update({
-    where: { id: b.id },
+  const { count } = await prisma.booking.updateMany({
+    where: { id: b.id, checkedInAt: null },
     data: { checkedInAt: now, conditionIn: condition, batteryIn: battery, returnNote: note ?? b.returnNote },
   });
-  await prisma.equipment.update({ where: { id: b.equipmentId }, data: { condition } });
+  if (!count) done(f, "error", "This item has already been checked in.");
+  const broken = await prisma.fault.count({ where: { equipmentId: b.equipmentId, severity: "UNUSABLE", resolvedAt: null } });
+  if (!broken) await prisma.equipment.update({ where: { id: b.equipmentId }, data: { condition } });
 
   if (condition !== "Good")
     await reportFaultFor(user.id, b.equipmentId, note ?? `Returned with: ${condition.toLowerCase()}.`, condition === "Minor issue" ? "MINOR" : "UNUSABLE", b.id);
@@ -261,15 +321,17 @@ export async function checkIn(f: FormData) {
 async function reportFaultFor(reporterId: number, equipmentId: number, description: string, severity: "MINOR" | "UNUSABLE", bookingId?: number) {
   const item = await prisma.equipment.findUniqueOrThrow({ where: { id: equipmentId } });
   const fault = await prisma.fault.create({ data: { equipmentId, reporterId, description, severity, bookingId: bookingId ?? null } });
-  if (severity === "UNUSABLE")
+  if (severity === "UNUSABLE") {
     await prisma.equipment.update({
       where: { id: equipmentId },
-      data: { outOfService: true, outOfServiceReason: `Fault reported: ${description}`, condition: "Damaged or not working" },
+      data: { outOfService: true, outOfServiceReason: item.outOfService ? item.outOfServiceReason : `${FAULT_REASON}${description}`, condition: "Damaged or not working" },
     });
+    await cancelAffected(equipmentId, item.name, "a fault was reported", bookingId);
+  }
   await notifyAdmins({
     kind: "FAULT",
     subject: `${severity === "UNUSABLE" ? "Out of service" : "Fault reported"}: ${item.name}`,
-    body: `${description}${severity === "UNUSABLE" ? " The item has been taken out of service until the fault is resolved." : ""}`,
+    body: `${/[.!?]$/.test(description) ? description : `${description}.`}${severity === "UNUSABLE" ? " The item has been taken out of service until the fault is resolved." : ""}`,
     link: "/admin#faults",
     key: `fault:${fault.id}`,
   });
@@ -277,7 +339,7 @@ async function reportFaultFor(reporterId: number, equipmentId: number, descripti
 
 export async function reportFault(f: FormData) {
   const user = await currentUser();
-  const equipmentId = id(f, "equipmentId");
+  const equipmentId = (await findItem(f, id(f, "equipmentId"))).id;
   const description = str(f, "description");
   const severity = str(f, "severity") === "UNUSABLE" ? "UNUSABLE" : "MINOR";
   if (description.length < 5) done(f, "error", "Please describe the fault in a few words.");
@@ -291,8 +353,12 @@ export async function resolveFault(f: FormData) {
   const fault = await prisma.fault.findUnique({ where: { id: id(f, "faultId") } });
   if (!fault || fault.resolvedAt) done(f, "error", "That fault has already been resolved.");
   await prisma.fault.update({ where: { id: fault.id }, data: { resolvedAt: new Date(), resolvedById: user.id, resolution: opt(f, "resolution") } });
+  const openLeft = await prisma.fault.count({ where: { equipmentId: fault.equipmentId, resolvedAt: null } });
+  if (!openLeft) await prisma.equipment.update({ where: { id: fault.equipmentId }, data: { condition: "Good" } });
   const stillBroken = await prisma.fault.count({ where: { equipmentId: fault.equipmentId, severity: "UNUSABLE", resolvedAt: null } });
-  if (!stillBroken && str(f, "backInService") === "1") {
+  const item = await prisma.equipment.findUniqueOrThrow({ where: { id: fault.equipmentId } });
+  const outBecauseOfFault = item.outOfService && (item.outOfServiceReason ?? "").startsWith(FAULT_REASON);
+  if (!stillBroken && outBecauseOfFault && str(f, "backInService") === "1") {
     await prisma.equipment.update({ where: { id: fault.equipmentId }, data: { outOfService: false, outOfServiceReason: null, condition: "Good" } });
     await afterFreed(fault.equipmentId);
   }
@@ -303,7 +369,7 @@ export async function resolveFault(f: FormData) {
 
 export async function toggleWatch(f: FormData) {
   const user = await currentUser();
-  const equipmentId = id(f, "equipmentId");
+  const equipmentId = (await findItem(f, id(f, "equipmentId"))).id;
   const existing = await prisma.watch.findUnique({ where: { equipmentId_userId: { equipmentId, userId: user.id } } });
   if (existing) {
     await prisma.watch.delete({ where: { id: existing.id } });
@@ -328,13 +394,21 @@ async function adminOnly(f: FormData) {
 export async function setOutOfService(f: FormData) {
   await adminOnly(f);
   const out = str(f, "out") === "1";
-  const equipmentId = id(f, "equipmentId");
+  const item = await findItem(f, id(f, "equipmentId"));
+  if (!out) {
+    const broken = await prisma.fault.count({ where: { equipmentId: item.id, severity: "UNUSABLE", resolvedAt: null } });
+    if (broken) done(f, "error", `${item.name} has an open fault that stops it being used. Resolve the fault first.`);
+  }
   await prisma.equipment.update({
-    where: { id: equipmentId },
+    where: { id: item.id },
     data: { outOfService: out, outOfServiceReason: out ? opt(f, "reason") : null },
   });
-  if (!out) await afterFreed(equipmentId);
-  done(f, "ok", out ? "Marked out of service." : "Back in service.");
+  if (out) {
+    const n = await cancelAffected(item.id, item.name, opt(f, "reason") ?? "taken out of service by lab staff");
+    done(f, "ok", `Marked out of service.${n ? ` ${n} upcoming booking${n > 1 ? "s were" : " was"} cancelled and the people told.` : ""}`);
+  }
+  await afterFreed(item.id);
+  done(f, "ok", "Back in service.");
 }
 
 const equipmentFields = (f: FormData) => ({
@@ -355,7 +429,7 @@ const equipmentFields = (f: FormData) => ({
 /** Only web links for manuals and photos, so a stored value can never run script in the page. */
 function checkLinks(f: FormData, data: { manualUrl: string | null; photoUrl: string | null }) {
   for (const [label, v] of [["Manual", data.manualUrl], ["Photo", data.photoUrl]] as const)
-    if (v && !/^https?:\/\/|^\/[^/]/.test(v)) done(f, "error", `${label} must be a web address starting with https:// or a site path starting with /.`);
+    if (v && !/^https?:\/\/[^\s]+$|^\/(?![/\\])\S*$/.test(v)) done(f, "error", `${label} must be a web address starting with https:// or a site path starting with /.`);
 }
 
 export async function addEquipment(f: FormData) {
@@ -369,7 +443,7 @@ export async function addEquipment(f: FormData) {
 
 export async function updateEquipment(f: FormData) {
   await adminOnly(f);
-  const equipmentId = id(f, "equipmentId");
+  const equipmentId = (await findItem(f, id(f, "equipmentId"))).id;
   const data = equipmentFields(f);
   if (!data.name || !data.type) done(f, "error", "Name and type are required.");
   checkLinks(f, data);

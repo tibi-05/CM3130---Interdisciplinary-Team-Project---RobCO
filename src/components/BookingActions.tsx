@@ -11,11 +11,23 @@ type B = BookingLike & { id: number; userId: number };
  * Check out / Check in / Cancel, shown only when the action makes sense for this person right now.
  * Check-out and check-in open the hand-over page, which records condition and battery.
  */
-export function BookingActions({ booking: b, user, now, returnTo }: { booking: B; user: { id: number; role: string }; now: Date; returnTo: string }) {
+export function BookingActions({
+  booking: b,
+  user,
+  now,
+  returnTo,
+  itemOutOfService = false,
+}: {
+  booking: B;
+  user: { id: number; role: string };
+  now: Date;
+  returnTo: string;
+  itemOutOfService?: boolean;
+}) {
   if (!can.actOnBooking(user, b) || b.cancelledAt || b.checkedInAt || b.approval === "REJECTED") return null;
   if (!b.checkedOutAt && now >= b.end) return null; // never collected and over: nothing left to do
   const canCollect =
-    b.approval !== "PENDING" && !b.checkedOutAt && now.getTime() >= b.start.getTime() - LAB.checkOutEarlyMinutes * 60_000 && now < b.end;
+    !itemOutOfService && b.approval !== "PENDING" && !b.checkedOutAt && now.getTime() >= b.start.getTime() - LAB.checkOutEarlyMinutes * 60_000 && now < b.end;
 
   return (
     <div className="flex flex-wrap gap-2">

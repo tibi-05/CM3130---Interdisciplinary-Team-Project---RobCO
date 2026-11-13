@@ -63,7 +63,7 @@ export default async function BookingsPage({ searchParams }: PageProps<"/booking
               </p>
               <p className={`text-sm font-semibold ${s.cls}`}>{s.text}</p>
             </div>
-            <BookingActions booking={b} user={user} now={now} returnTo="/bookings" />
+            <BookingActions booking={b} user={user} now={now} returnTo="/bookings" itemOutOfService={b.equipment.outOfService} />
           </li>
         );
       })}
