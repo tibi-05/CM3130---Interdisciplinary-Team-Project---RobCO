@@ -5,7 +5,7 @@ import { can } from "@/lib/permissions";
 import { fmtWhen } from "@/lib/time";
 import { BATTERY, CONDITIONS, needsCharge } from "@/lib/handover";
 import { checkIn, checkOut } from "@/app/actions";
-import { EquipmentIcon } from "@/components/EquipmentIcon";
+import { EquipmentImage } from "@/components/EquipmentImage";
 import { Notice, one } from "@/components/Notice";
 import { TextArea } from "@/components/Field";
 import { BackLink, PageHead } from "@/components/PageHead";
@@ -42,8 +42,8 @@ export default async function HandoverPage({ params, searchParams }: PageProps<"
           </ul>
         }
         aside={
-          <span className="hidden bg-paper p-3 sm:block">
-            <EquipmentIcon type={b.equipment.type} className="size-16 text-rgu-purple" />
+          <span className="hidden sm:block">
+            <EquipmentImage item={b.equipment} size="size-28" />
           </span>
         }
       />

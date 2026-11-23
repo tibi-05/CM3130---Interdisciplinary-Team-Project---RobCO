@@ -6,7 +6,7 @@ import { approvalReasons, findClash, repeatedBookings } from "@/lib/booking";
 import { LAB } from "@/lib/config";
 import { fmtWhen } from "@/lib/time";
 import { review } from "@/app/actions";
-import { EquipmentIcon } from "@/components/EquipmentIcon";
+import { EquipmentImage } from "@/components/EquipmentImage";
 import { Notice, one } from "@/components/Notice";
 import { TextField } from "@/components/Field";
 import { Denied, PageHead } from "@/components/PageHead";
@@ -56,7 +56,7 @@ export default async function RequestsPage({ searchParams }: PageProps<"/request
                 return (
                   <li key={b.id} className="panel sm:p-6">
                     <div className="flex flex-wrap items-start gap-4">
-                      <EquipmentIcon type={b.equipment.type} className="size-12 shrink-0 text-rgu-purple" />
+                      <EquipmentImage item={b.equipment} size="size-16" />
                       <div className="min-w-0 flex-1 basis-60">
                         <h2 className="text-xl font-extrabold">
                           <Link href={`/equipment/${b.equipmentId}`} className="underline-offset-4 hover:underline">
