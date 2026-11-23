@@ -5,7 +5,7 @@ import { can } from "@/lib/permissions";
 import { isActive } from "@/lib/booking";
 import { fmtWhen } from "@/lib/time";
 import { BookingActions } from "@/components/BookingActions";
-import { EquipmentIcon } from "@/components/EquipmentIcon";
+import { EquipmentImage } from "@/components/EquipmentImage";
 import { Notice, one } from "@/components/Notice";
 import { PageHead } from "@/components/PageHead";
 
@@ -46,7 +46,7 @@ export default async function BookingsPage({ searchParams }: PageProps<"/booking
         const s = state(b, now);
         return (
           <li key={b.id} className="flex flex-wrap items-center gap-x-4 gap-y-3 py-4">
-            <EquipmentIcon type={b.equipment.type} className="size-10 text-rgu-purple shrink-0" />
+            <EquipmentImage item={b.equipment} size="size-14" />
             <div className="flex-1 min-w-52">
               <p>
                 <Link href={`/equipment/${b.equipmentId}`} className="font-extrabold underline-offset-4 hover:underline">

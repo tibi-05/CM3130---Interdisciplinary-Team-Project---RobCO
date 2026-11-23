@@ -4,7 +4,7 @@ import { requestNow } from "@/lib/session";
 import { LAB } from "@/lib/config";
 import { londonDate, slotTimes } from "@/lib/time";
 import { requestExtended } from "@/app/actions";
-import { EquipmentIcon } from "@/components/EquipmentIcon";
+import { EquipmentImage } from "@/components/EquipmentImage";
 import { Notice, one } from "@/components/Notice";
 import { SelectField, TextArea, TextField } from "@/components/Field";
 import { BackLink, PageHead } from "@/components/PageHead";
@@ -31,7 +31,7 @@ export default async function RequestPage({ params, searchParams }: PageProps<"/
         <div className="max-w-3xl">
           <Notice ok={one(sp.ok)} error={one(sp.error)} />
           <div className="flex items-start gap-4">
-            <EquipmentIcon type={e.type} className="size-12 shrink-0 text-rgu-purple" />
+            <EquipmentImage item={e} size="size-16" />
             <p>
               For anything longer than {LAB.maxBookingMinutes / 60} hours, or over several days, for example a research or honours project. Lab staff
               review each request and you&apos;ll get the decision in your inbox. The item is held for you while the request is reviewed.

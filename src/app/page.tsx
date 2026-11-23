@@ -3,7 +3,7 @@ import { requestNow } from "@/lib/session";
 import { prisma } from "@/lib/db";
 import { statusOf, type BookingLike, type Status, type StatusKind } from "@/lib/booking";
 import { fmtWhen } from "@/lib/time";
-import { EquipmentIcon } from "@/components/EquipmentIcon";
+import { EquipmentImage } from "@/components/EquipmentImage";
 import { StatusBadge, STATUS_LABEL } from "@/components/StatusBadge";
 import { one } from "@/components/Notice";
 import { PageHead } from "@/components/PageHead";
@@ -109,8 +109,10 @@ export default async function Board({ searchParams }: PageProps<"/">) {
                 href={`/equipment/${e.id}`}
                 className="group flex h-full flex-col border border-rule bg-paper hover:border-rgu-purple hover:shadow-lift"
               >
-                <div className="flex gap-4 p-4">
-                  <EquipmentIcon type={e.type} className="size-14 shrink-0 text-rgu-purple" />
+                <div className="border-b border-rule">
+                  <EquipmentImage item={e} variant="cover" />
+                </div>
+                <div className="p-4">
                   <div className="min-w-0">
                     <h2 className="text-lg leading-tight font-extrabold group-hover:underline underline-offset-4">{e.name}</h2>
                     <p className="mt-1 text-sm text-muted">{e.type}</p>

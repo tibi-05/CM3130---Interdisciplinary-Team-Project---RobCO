@@ -79,6 +79,7 @@ async function main() {
           serialNumber: u.serialNumber ?? null,
           condition: u.condition,
           notes: u.notes ?? null,
+          photoUrl: u.photo ?? null,
           safetyInfo: SAFETY[u.type] ? `${SAFETY[u.type]}\n\n${EXAMPLE}` : null,
           ...(u.assetId === "ROB-003" ? { outOfService: true, outOfServiceReason: "Model and serial number still to be confirmed with James." } : {}),
         },

@@ -9,7 +9,7 @@ import { BATTERY, CONDITIONS, needsCharge } from "@/lib/handover";
 import { isLate } from "@/lib/usage";
 import { book, reportFault, resolveFault, toggleWatch, walkUp } from "@/app/actions";
 import { can } from "@/lib/permissions";
-import { EquipmentIcon } from "@/components/EquipmentIcon";
+import { EquipmentImage } from "@/components/EquipmentImage";
 import { StatusBadge } from "@/components/StatusBadge";
 import { BookingActions } from "@/components/BookingActions";
 import { Notice, one } from "@/components/Notice";
@@ -85,16 +85,6 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
             <li>Kept in {e.location}</li>
           </ul>
         }
-        aside={
-          e.photoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element -- admin-entered URL, any host
-            <img src={e.photoUrl} alt={`Photo of ${e.name}`} className="size-28 object-cover border border-rule bg-paper" />
-          ) : (
-            <span className="hidden bg-paper p-3 sm:block">
-              <EquipmentIcon type={e.type} className="size-20 text-rgu-purple" />
-            </span>
-          )
-        }
       />
 
       <div className="mx-auto max-w-6xl px-4 pt-6">
@@ -162,7 +152,16 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
             </section>
           </div>
 
-          <dl className="grid content-start grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 self-start border border-rule border-t-4 border-t-rgu-purple p-5 text-sm">
+          <div className="grid content-start gap-4 self-start">
+          <figure className="border border-rule">
+            <EquipmentImage item={e} variant="cover" decorative={false} />
+            {e.photoUrl && e.assetId && (
+              <figcaption className="border-t border-rule px-3 py-2 text-sm text-muted">
+                {/#\d+$/.test(e.name) ? `Photo of the ${e.assetId} units` : `Photo of ${e.assetId}`}
+              </figcaption>
+            )}
+          </figure>
+          <dl className="grid content-start grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 border border-rule border-t-4 border-t-rgu-purple p-5 text-sm">
             <dt className="font-semibold">Asset ID</dt>
             <dd className="font-mono">{e.assetId ?? "Not recorded"}</dd>
             <dt className="font-semibold">Manufacturer</dt>
@@ -184,6 +183,7 @@ export default async function EquipmentPage({ params, searchParams }: PageProps<
               )}
             </dd>
           </dl>
+          </div>
         </div>
 
         {/* ---- Booking ---- */}
